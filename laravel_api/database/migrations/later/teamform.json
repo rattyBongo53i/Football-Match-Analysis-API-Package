@@ -1,0 +1,103 @@
+{
+  "team": {
+    "name": "Manchester United",
+    "short_name": "Man Utd",
+    "code": "MUN",
+    "slug": "manchester-united",
+    "country": "England",
+    "city": "Manchester",
+    "stadium": "Old Trafford",
+    "founded_year": 1878,
+    "logo_url": "https://example.com/logos/manchester-united.png",
+    
+    "overall_rating": 8.2,
+    "attack_rating": 8.5,
+    "defense_rating": 7.8,
+    "home_strength": 8.7,
+    "away_strength": 7.5,
+    
+    "current_form": "WWDLW",
+    "form_rating": 7.8,
+    "momentum": 0.3,
+    
+    "expected_goals_for": 1.8,
+    "expected_goals_against": 1.2,
+    "possession_avg": 58.5,
+    "shots_on_target_avg": 5.2,
+    "clean_sheet_percentage": 35.0,
+    "conversion_rate": 12.5,
+    
+    "home_stats": {
+      "matches_played": 10,
+      "wins": 7,
+      "draws": 2,
+      "losses": 1,
+      "goals_scored": 21,
+      "goals_conceded": 8,
+      "clean_sheets": 4,
+      "avg_goals_scored": 2.1,
+      "avg_goals_conceded": 0.8,
+      "win_percentage": 70.0,
+      "draw_percentage": 20.0,
+      "loss_percentage": 10.0
+    },
+    
+    "away_stats": {
+      "matches_played": 10,
+      "wins": 5,
+      "draws": 3,
+      "losses": 2,
+      "goals_scored": 15,
+      "goals_conceded": 10,
+      "clean_sheets": 3,
+      "avg_goals_scored": 1.5,
+      "avg_goals_conceded": 1.0,
+      "win_percentage": 50.0,
+      "draw_percentage": 30.0,
+      "loss_percentage": 20.0
+    },
+    
+    "recent_performances": [
+      {
+        "date": "2024-12-01",
+        "opponent": "Liverpool",
+        "venue": "home",
+        "result": "2-1",
+        "outcome": "W",
+        "goals_scored": 2,
+        "goals_conceded": 1,
+        "possession": 62,
+        "shots_on_target": 6,
+        "expected_goals": 2.1
+      },
+      {
+        "date": "2024-11-28",
+        "opponent": "Chelsea",
+        "venue": "away",
+        "result": "1-1",
+        "outcome": "D",
+        "goals_scored": 1,
+        "goals_conceded": 1,
+        "possession": 55,
+        "shots_on_target": 4,
+        "expected_goals": 1.4
+      },
+      {
+        "date": "2024-11-24",
+        "opponent": "Arsenal",
+        "venue": "home",
+        "result": "3-0",
+        "outcome": "W",
+        "goals_scored": 3,
+        "goals_conceded": 0,
+        "possession": 60,
+        "shots_on_target": 7,
+        "expected_goals": 2.8
+      }
+    ],
+    
+    "fair_odds_home_win": 1.85,
+    "fair_odds_draw": 3.60,
+    "fair_odds_away_win": 4.20
+  }
+}

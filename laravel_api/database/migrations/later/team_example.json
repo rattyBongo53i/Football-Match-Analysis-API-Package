@@ -1,0 +1,44 @@
+{
+    "match_id": 88,
+    "team_id": "ARS",
+    "venue": "home",
+    "raw_form": [
+        {
+            "date": "2024-12-01",
+            "opponent": "Chelsea",
+            "result": "2-1",
+            "outcome": "W"
+        },
+        {
+            "date": "2024-11-24",
+            "opponent": "Liverpool",
+            "result": "1-1",
+            "outcome": "D"
+        },
+        {
+            "date": "2024-11-19",
+            "opponent": "Man City",
+            "result": "0-3",
+            "outcome": "L"
+        },
+        {
+            "date": "2024-11-11",
+            "opponent": "Newcastle",
+            "result": "4-0",
+            "outcome": "W"
+        },
+        {
+            "date": "2024-11-03",
+            "opponent": "Brighton",
+            "result": "3-2",
+            "outcome": "W"
+        }
+    ],
+    "opponent_strength": [
+        { "opponent": "Chelsea", "rank": 6 },
+        { "opponent": "Liverpool", "rank": 3 },
+        { "opponent": "Man City", "rank": 1 },
+        { "opponent": "Newcastle", "rank": 7 },
+        { "opponent": "Brighton", "rank": 10 }
+    ]
+}
