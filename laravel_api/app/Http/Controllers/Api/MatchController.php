@@ -1,425 +1,508 @@
 <?php
-// app/Http/Controllers/Api/MatchController.php
 
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreMatchRequest;
+use App\Http\Requests\UpdateMatchRequest;
 use App\Models\MatchModel;
+use App\Models\Team;
 use App\Models\Team_Form;
 use App\Models\Head_To_Head;
-use App\Models\Team;
+use App\Services\TeamService;
+use App\Jobs\ProcessMatchForML;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class MatchController extends Controller
 {
-    /**
-     * Store a newly created match with all related data
-     */
-    public function store(Request $request)
+    protected TeamService $teamService;
+
+    public function __construct(TeamService $teamService)
     {
-        // Validate incoming data
-        $validator = Validator::make($request->all(), [
-            'home_team' => 'required|string|max:255',
-            'away_team' => 'required|string|max:255',
-            'home_team_code' => 'nullable|string|max:10',
-            'away_team_code' => 'nullable|string|max:10',
-            'league' => 'required|string|max:255',
-            'competition' => 'nullable|string|max:255',
-            'match_date' => 'nullable|date',
-            'venue' => 'nullable|string|max:50',
-            'match_time' => 'nullable|string|max:10',
-            
-            // Head to head data
-            'head_to_head_summary' => 'nullable|string',
-            'head_to_head_stats' => 'nullable|array',
-            
-            // Team forms
-            'home_team_form' => 'nullable|array',
-            'away_team_form' => 'nullable|array',
-            
-            // Odds
-            'odds' => 'nullable|array',
-            
-            // Additional data
-            'weather_conditions' => 'nullable|string|max:100',
-            'referee' => 'nullable|string|max:100',
-            'importance' => 'nullable|string|max:50',
-            'tv_coverage' => 'nullable|string|max:100',
-            'predicted_attendance' => 'nullable|integer',
-            
-            // ML flags
-            'for_ml_training' => 'nullable|boolean',
-            'prediction_ready' => 'nullable|boolean',
-        ]);
+        $this->teamService = $teamService;
+    }
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        DB::beginTransaction();
-        
+    /**
+     * Display a listing of matches.
+     */
+    public function index(Request $request): JsonResponse
+    {
         try {
-            // Create or update teams first
-            $homeTeam = $this->createOrUpdateTeam([
-                'name' => $request->home_team,
-                'code' => $request->home_team_code ?? strtoupper(substr($request->home_team, 0, 3)),
-                'country' => $this->extractCountryFromLeague($request->league),
-            ]);
-            
-            $awayTeam = $this->createOrUpdateTeam([
-                'name' => $request->away_team,
-                'code' => $request->away_team_code ?? strtoupper(substr($request->away_team, 0, 3)),
-                'country' => $this->extractCountryFromLeague($request->league),
-            ]);
-            
-            // Create match
-            $match = MatchModel::create([
-                'home_team_id' => $homeTeam->id,
-                'away_team_id' => $awayTeam->id,
-                'home_team' => $request->home_team,
-                'away_team' => $request->away_team,
-                'league' => $request->league,
-                'competition' => $request->competition,
-                'match_date' => $request->match_date,
-                'venue' => $request->venue,
-                'match_time' => $request->match_time,
-                'odds' => $request->odds ?? [],
-                'weather_conditions' => $request->weather_conditions,
-                'referee' => $request->referee,
-                'importance' => $request->importance,
-                'tv_coverage' => $request->tv_coverage,
-                'predicted_attendance' => $request->predicted_attendance,
-                'for_ml_training' => $request->for_ml_training ?? true,
-                'prediction_ready' => $request->prediction_ready ?? false,
-                'status' => 'pending', // pending, processed, predicted
-            ]);
-            
-            // Create team forms if provided
-            if ($request->has('home_team_form') && !empty($request->home_team_form)) {
-                $this->createTeamForm($match->id, $homeTeam, 'home', $request->home_team_form);
+            $query = MatchModel::with(['homeTeam', 'awayTeam', 'headToHead', 'teamForms']);
+
+            // Apply filters
+            if ($request->has('league')) {
+                $query->where('league', $request->league);
             }
-            
-            if ($request->has('away_team_form') && !empty($request->away_team_form)) {
-                $this->createTeamForm($match->id, $awayTeam, 'away', $request->away_team_form);
+
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
             }
-            
-            // Create head-to-head data if provided
-            if ($request->has('head_to_head_summary') || $request->has('head_to_head_stats')) {
-                $this->createHeadToHead($match->id, $request->all());
+
+            if ($request->has('date_from')) {
+                $query->whereDate('match_date', '>=', $request->date_from);
             }
-            
-            // Update team statistics based on form data
-            $this->updateTeamStatistics($homeTeam, $request->home_team_form ?? []);
-            $this->updateTeamStatistics($awayTeam, $request->away_team_form ?? []);
-            
-            DB::commit();
-            
-            // Trigger Python processing job
-            \App\Jobs\ProcessMatchForML::dispatch($match->id);
-            
+
+            if ($request->has('date_to')) {
+                $query->whereDate('match_date', '<=', $request->date_to);
+            }
+
+            if ($request->has('prediction_ready')) {
+                $query->where('prediction_ready', $request->boolean('prediction_ready'));
+            }
+
+            // Pagination
+            $perPage = $request->get('per_page', 15);
+            $matches = $query->latest('match_date')->paginate($perPage);
+
             return response()->json([
                 'success' => true,
-                'message' => 'Match created successfully',
-                'data' => $match->load(['homeTeam', 'awayTeam', 'teamForms', 'headToHead'])
-            ], 201);
-            
+                'data' => $matches->items(),
+                'meta' => [
+                    'current_page' => $matches->currentPage(),
+                    'last_page' => $matches->lastPage(),
+                    'per_page' => $matches->perPage(),
+                    'total' => $matches->total(),
+                ],
+            ]);
+
         } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Match creation failed: ' . $e->getMessage());
-            
+            Log::error('Failed to retrieve matches', ['error' => $e->getMessage()]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create match',
-                'error' => $e->getMessage()
+                'message' => 'Failed to retrieve matches',
             ], 500);
         }
     }
-    
+
     /**
-     * Create or update team
+     * Store a newly created match.
      */
-    private function createOrUpdateTeam(array $teamData)
+    public function store(StoreMatchRequest $request): JsonResponse
     {
-        $team = Team::where('code', $teamData['code'])->first();
-        
-        if (!$team) {
-            $team = Team::create([
-                'name' => $teamData['name'],
-                'code' => $teamData['code'],
-                'short_name' => substr($teamData['name'], 0, 10),
-                'slug' => strtolower(str_replace(' ', '-', $teamData['name'])),
-                'country' => $teamData['country'],
-                'overall_rating' => 5.0,
-                'attack_rating' => 5.0,
-                'defense_rating' => 5.0,
-                'home_strength' => 5.0,
-                'away_strength' => 5.0,
+        DB::beginTransaction();
+
+        try {
+            // Resolve teams using the service
+            $homeTeam = $this->teamService->resolveTeam($request->home_team, $request->league);
+            $awayTeam = $this->teamService->resolveTeam($request->away_team, $request->league);
+
+            // Prepare match data
+            $matchData = $this->prepareMatchData($request, $homeTeam, $awayTeam);
+
+            // Create match
+            $match = MatchModel::create($matchData);
+
+            // Store team forms if provided
+            $this->storeTeamForms($match, $homeTeam, $awayTeam, $request);
+
+            // Store head-to-head if provided
+            $this->storeHeadToHead($match, $request);
+
+            DB::commit();
+
+            // Dispatch ML processing job
+            ProcessMatchForML::dispatch($match->id);
+
+            Log::info('Match created successfully', ['match_id' => $match->id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Match created successfully',
+                'data' => $match->load(['homeTeam', 'awayTeam', 'teamForms', 'headToHead']),
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('Failed to create match', [
+                'error' => $e->getMessage(),
+                'request_data' => $request->except(['home_team_form', 'away_team_form', 'head_to_head_stats']),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create match',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Display the specified match.
+     */
+    public function show(string $id): JsonResponse
+    {
+        try {
+            $match = MatchModel::with([
+                'homeTeam',
+                'awayTeam',
+                'headToHead',
+                'teamForms',
+                'predictions'
+            ])->findOrFail($id);
+
+            return response()->json([
+                'success' => true,
+                'data' => $match,
+            ]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Match not found',
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve match', [
+                'match_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve match',
+            ], 500);
+        }
+    }
+
+    /**
+     * Update the specified match.
+     */
+    public function update(UpdateMatchRequest $request, string $id): JsonResponse
+    {
+        DB::beginTransaction();
+
+        try {
+            $match = MatchModel::findOrFail($id);
+
+            // Update basic match data
+            $matchData = $request->validated();
+
+            // If teams are being updated, resolve them
+            if ($request->has('home_team') || $request->has('league')) {
+                $homeTeam = $this->teamService->resolveTeam(
+                    $request->get('home_team', $match->homeTeam?->name),
+                    $request->get('league', $match->league)
+                );
+                $matchData['home_team_id'] = $homeTeam->id;
+            }
+
+            if ($request->has('away_team') || $request->has('league')) {
+                $awayTeam = $this->teamService->resolveTeam(
+                    $request->get('away_team', $match->awayTeam?->name),
+                    $request->get('league', $match->league)
+                );
+                $matchData['away_team_id'] = $awayTeam->id;
+            }
+
+            // Update the match
+            $match->update($matchData);
+
+            // Update team forms if provided
+            if ($request->has('home_team_form') || $request->has('away_team_form')) {
+                $this->updateTeamForms($match, $request);
+            }
+
+            // Update head-to-head if provided
+            if ($request->has('head_to_head_stats')) {
+                $this->updateHeadToHead($match, $request);
+            }
+
+            DB::commit();
+
+            // If critical fields changed, reprocess for ML
+            if ($this->shouldReprocessForML($match, $request)) {
+                ProcessMatchForML::dispatch($match->id);
+            }
+
+            Log::info('Match updated successfully', ['match_id' => $match->id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Match updated successfully',
+                'data' => $match->fresh(['homeTeam', 'awayTeam', 'teamForms', 'headToHead']),
+            ]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Match not found',
+            ], 404);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('Failed to update match', [
+                'match_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update match',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Remove the specified match.
+     */
+    public function destroy(string $id): JsonResponse
+    {
+        DB::beginTransaction();
+
+        try {
+            $match = MatchModel::findOrFail($id);
+
+            // Check if match can be deleted (no dependent records)
+            if ($match->predictions()->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot delete match with existing predictions',
+                ], 422);
+            }
+
+            $match->delete();
+
+            DB::commit();
+
+            Log::info('Match deleted successfully', ['match_id' => $id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Match deleted successfully',
+            ]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Match not found',
+            ], 404);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('Failed to delete match', [
+                'match_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete match',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Get matches ready for ML processing.
+     */
+    public function forMlProcessing(Request $request): JsonResponse
+    {
+        try {
+            $query = MatchModel::where('for_ml_training', true)
+                ->where('prediction_ready', false)
+                ->with(['homeTeam', 'awayTeam', 'teamForms', 'headToHead']);
+
+            $perPage = $request->get('per_page', 50);
+            $matches = $query->latest()->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $matches->items(),
+                'meta' => [
+                    'current_page' => $matches->currentPage(),
+                    'last_page' => $matches->lastPage(),
+                    'per_page' => $matches->perPage(),
+                    'total' => $matches->total(),
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve ML-ready matches', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve ML-ready matches',
+            ], 500);
+        }
+    }
+
+    /**
+     * Prepare match data from request.
+     */
+    private function prepareMatchData($request, Team $homeTeam, Team $awayTeam): array
+    {
+        return [
+            'home_team_id' => $homeTeam->id,
+            'away_team_id' => $awayTeam->id,
+            'league' => trim($request->league),
+            'competition' => $request->competition,
+            'match_date' => $request->match_date,
+            'match_time' => $request->match_time,
+            'venue' => $request->venue,
+            'weather_conditions' => $request->weather_conditions,
+            'referee' => $request->referee,
+            'importance' => $request->importance,
+            'tv_coverage' => $request->tv_coverage,
+            'predicted_attendance' => (int) $request->predicted_attendance,
+            'odds' => $request->odds,
+            'for_ml_training' => (bool) ($request->for_ml_training ?? true),
+            'prediction_ready' => (bool) ($request->prediction_ready ?? false),
+            'analysis_status' => 'pending',
+            'status' => $request->status ?? 'scheduled',
+        ];
+    }
+
+    /**
+     * Store team forms from request.
+     */
+    private function storeTeamForms(MatchModel $match, Team $homeTeam, Team $awayTeam, $request): void
+    {
+        if ($request->filled('home_team_form')) {
+            Team_Form::create([
+                'match_id' => $match->id,
+                'team_id' => $homeTeam->code,
+                'venue' => 'home',
+                'form_string' => $request->home_team_form['form_string'] ?? '',
+                'matches_played' => (int) ($request->home_team_form['matches_played'] ?? 0),
+                'wins' => (int) ($request->home_team_form['wins'] ?? 0),
+                'draws' => (int) ($request->home_team_form['draws'] ?? 0),
+                'losses' => (int) ($request->home_team_form['losses'] ?? 0),
+                'avg_goals_scored' => (float) ($request->home_team_form['avg_goals_scored'] ?? 0),
+                'avg_goals_conceded' => (float) ($request->home_team_form['avg_goals_conceded'] ?? 0),
+                'form_rating' => (float) ($request->home_team_form['form_rating'] ?? 5),
+                'form_momentum' => (float) ($request->home_team_form['form_momentum'] ?? 0),
+                'raw_form' => $request->home_team_form['raw_form'] ?? [],
             ]);
         }
-        
-        return $team;
-    }
-    
-    /**
-     * Create team form record
-     */
-    private function createTeamForm($matchId, $team, $venue, array $formData)
-    {
-        $teamForm = Team_Form::updateOrCreate(
-            [
-                'match_id' => $matchId,
-                'team_id' => $team->code,
-                'venue' => $venue,
-            ],
-            [
-                'raw_form' => $formData['raw_form'] ?? [],
-                'matches_played' => $formData['matches_played'] ?? count($formData['raw_form'] ?? []),
-                'wins' => $formData['wins'] ?? 0,
-                'draws' => $formData['draws'] ?? 0,
-                'losses' => $formData['losses'] ?? 0,
-                'goals_scored' => $formData['goals_scored'] ?? 0,
-                'goals_conceded' => $formData['goals_conceded'] ?? 0,
-                'avg_goals_scored' => $formData['avg_goals_scored'] ?? 0,
-                'avg_goals_conceded' => $formData['avg_goals_conceded'] ?? 0,
-                'clean_sheets' => $formData['clean_sheets'] ?? 0,
-                'failed_to_score' => $formData['failed_to_score'] ?? 0,
-                'form_string' => $formData['form_string'] ?? '',
-                'form_rating' => $formData['form_rating'] ?? 5.0,
-                'form_momentum' => $formData['form_momentum'] ?? 0,
-                'opponent_strength' => $formData['opponent_strength'] ?? [],
-                'win_probability' => $formData['win_probability'] ?? 0.33,
-                'draw_probability' => $formData['draw_probability'] ?? 0.33,
-                'loss_probability' => $formData['loss_probability'] ?? 0.34,
-            ]
-        );
-        
-        return $teamForm;
-    }
-    
-    /**
-     * Create head-to-head record
-     */
-    private function createHeadToHead($matchId, array $data)
-    {
-        $headToHead = Head_To_Head::updateOrCreate(
-            ['match_id' => $matchId],
-            [
-                'form' => $this->generateFormString($data['head_to_head_stats'] ?? []),
-                'stats' => $data['head_to_head_stats'] ?? [],
-                'last_meetings' => [],
-                'home_wins' => $data['head_to_head_stats']['home_wins'] ?? 0,
-                'away_wins' => $data['head_to_head_stats']['away_wins'] ?? 0,
-                'draws' => $data['head_to_head_stats']['draws'] ?? 0,
-                'total_meetings' => 
-                    ($data['head_to_head_stats']['home_wins'] ?? 0) +
-                    ($data['head_to_head_stats']['away_wins'] ?? 0) +
-                    ($data['head_to_head_stats']['draws'] ?? 0),
-                'last_meeting_date' => null,
-                'last_meeting_result' => null,
-                'home_goals' => 0,
-                'away_goals' => 0,
-            ]
-        );
-        
-        return $headToHead;
-    }
-    
-    /**
-     * Update team statistics
-     */
-    private function updateTeamStatistics($team, array $formData)
-    {
-        if (empty($formData)) return;
-        
-        $matchesPlayed = $team->matches_played + ($formData['matches_played'] ?? 0);
-        $wins = $team->wins + ($formData['wins'] ?? 0);
-        $draws = $team->draws + ($formData['draws'] ?? 0);
-        $losses = $team->losses + ($formData['losses'] ?? 0);
-        
-        $goalsScored = $team->goals_scored + ($formData['goals_scored'] ?? 0);
-        $goalsConceded = $team->goals_conceded + ($formData['goals_conceded'] ?? 0);
-        
-        $team->update([
-            'matches_played' => $matchesPlayed,
-            'wins' => $wins,
-            'draws' => $draws,
-            'losses' => $losses,
-            'goals_scored' => $goalsScored,
-            'goals_conceded' => $goalsConceded,
-            'goal_difference' => $goalsScored - $goalsConceded,
-            'points' => ($wins * 3) + $draws,
-            'current_form' => $formData['form_string'] ?? $team->current_form,
-            'form_rating' => $formData['form_rating'] ?? $team->form_rating,
-            'momentum' => $formData['form_momentum'] ?? $team->momentum,
-        ]);
-    }
-    
-    /**
-     * Generate form string from stats
-     */
-    private function generateFormString(array $stats)
-    {
-        $homeWins = $stats['home_wins'] ?? 0;
-        $draws = $stats['draws'] ?? 0;
-        $awayWins = $stats['away_wins'] ?? 0;
-        
-        return "{$homeWins}-{$draws}-{$awayWins}";
-    }
-    
-    /**
-     * Extract country from league name
-     */
-    private function extractCountryFromLeague(string $league)
-    {
-        $countryMap = [
-            'Premier League' => 'England',
-            'La Liga' => 'Spain',
-            'Serie A' => 'Italy',
-            'Bundesliga' => 'Germany',
-            'Ligue 1' => 'France',
-            'Champions League' => 'Europe',
-            'Europa League' => 'Europe',
-            'FA Cup' => 'England',
-            'EFL Cup' => 'England',
-        ];
-        
-        return $countryMap[$league] ?? 'Unknown';
-    }
-    
-    /**
-     * Get all matches with related data
-     */
-    public function index()
-    {
-        $matches = MatchModel::with(['homeTeam', 'awayTeam', 'teamForms', 'headToHead'])
-            ->orderBy('match_date', 'desc')
-            ->get();
-        
-        return response()->json([
-            'success' => true,
-            'data' => $matches
-        ]);
-    }
-    
-    /**
-     * Get match by ID
-     */
-    public function show($id)
-    {
-        $match = MatchModel::with(['homeTeam', 'awayTeam', 'teamForms', 'headToHead'])->find($id);
-        
-        if (!$match) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Match not found'
-            ], 404);
+
+        if ($request->filled('away_team_form')) {
+            Team_Form::create([
+                'match_id' => $match->id,
+                'team_id' => $awayTeam->code,
+                'venue' => 'away',
+                'form_string' => $request->away_team_form['form_string'] ?? '',
+                'matches_played' => (int) ($request->away_team_form['matches_played'] ?? 0),
+                'wins' => (int) ($request->away_team_form['wins'] ?? 0),
+                'draws' => (int) ($request->away_team_form['draws'] ?? 0),
+                'losses' => (int) ($request->away_team_form['losses'] ?? 0),
+                'avg_goals_scored' => (float) ($request->away_team_form['avg_goals_scored'] ?? 0),
+                'avg_goals_conceded' => (float) ($request->away_team_form['avg_goals_conceded'] ?? 0),
+                'form_rating' => (float) ($request->away_team_form['form_rating'] ?? 5),
+                'form_momentum' => (float) ($request->away_team_form['form_momentum'] ?? 0),
+                'raw_form' => $request->away_team_form['raw_form'] ?? [],
+            ]);
         }
-        
-        return response()->json([
-            'success' => true,
-            'data' => $match
-        ]);
     }
-    
+
     /**
-     * Get matches ready for Python processing
+     * Store head-to-head data from request.
      */
-    public function getMatchesForML()
+    private function storeHeadToHead(MatchModel $match, $request): void
     {
-        $matches = MatchModel::with(['homeTeam', 'awayTeam', 'teamForms', 'headToHead'])
-            ->where('for_ml_training', true)
-            ->where('prediction_ready', false)
-            ->orderBy('created_at', 'desc')
-            ->limit(50)
-            ->get()
-            ->map(function ($match) {
-                return [
+        if ($request->filled('head_to_head_stats')) {
+            Head_To_Head::create([
+                'match_id' => $match->id,
+                'stats' => $request->head_to_head_stats,
+                'home_wins' => (int) ($request->head_to_head_stats['home_wins'] ?? 0),
+                'away_wins' => (int) ($request->head_to_head_stats['away_wins'] ?? 0),
+                'draws' => (int) ($request->head_to_head_stats['draws'] ?? 0),
+                'total_meetings' => (int) ($request->head_to_head_stats['home_wins'] ?? 0) +
+                    (int) ($request->head_to_head_stats['away_wins'] ?? 0) +
+                    (int) ($request->head_to_head_stats['draws'] ?? 0),
+            ]);
+        }
+    }
+
+    /**
+     * Update team forms.
+     */
+    private function updateTeamForms(MatchModel $match, $request): void
+    {
+        if ($request->has('home_team_form')) {
+            Team_Form::updateOrCreate(
+                [
                     'match_id' => $match->id,
-                    'home_team' => $match->home_team,
-                    'away_team' => $match->away_team,
-                    'league' => $match->league,
-                    'match_date' => $match->match_date,
-                    'home_team_form' => $match->teamForms->where('venue', 'home')->first()?->toArray() ?? [],
-                    'away_team_form' => $match->teamForms->where('venue', 'away')->first()?->toArray() ?? [],
-                    'head_to_head' => $match->headToHead?->toArray() ?? [],
-                    'odds' => $match->odds,
-                ];
-            });
-        
-        return response()->json([
-            'success' => true,
-            'data' => $matches
-        ]);
+                    'venue' => 'home',
+                ],
+                [
+                    'team_id' => $match->homeTeam->code,
+                    'form_string' => $request->home_team_form['form_string'] ?? '',
+                    'matches_played' => (int) ($request->home_team_form['matches_played'] ?? 0),
+                    'wins' => (int) ($request->home_team_form['wins'] ?? 0),
+                    'draws' => (int) ($request->home_team_form['draws'] ?? 0),
+                    'losses' => (int) ($request->home_team_form['losses'] ?? 0),
+                    'avg_goals_scored' => (float) ($request->home_team_form['avg_goals_scored'] ?? 0),
+                    'avg_goals_conceded' => (float) ($request->home_team_form['avg_goals_conceded'] ?? 0),
+                    'form_rating' => (float) ($request->home_team_form['form_rating'] ?? 5),
+                    'form_momentum' => (float) ($request->home_team_form['form_momentum'] ?? 0),
+                    'raw_form' => $request->home_team_form['raw_form'] ?? [],
+                ]
+            );
+        }
+
+        if ($request->has('away_team_form')) {
+            Team_Form::updateOrCreate(
+                [
+                    'match_id' => $match->id,
+                    'venue' => 'away',
+                ],
+                [
+                    'team_id' => $match->awayTeam->code,
+                    'form_string' => $request->away_team_form['form_string'] ?? '',
+                    'matches_played' => (int) ($request->away_team_form['matches_played'] ?? 0),
+                    'wins' => (int) ($request->away_team_form['wins'] ?? 0),
+                    'draws' => (int) ($request->away_team_form['draws'] ?? 0),
+                    'losses' => (int) ($request->away_team_form['losses'] ?? 0),
+                    'avg_goals_scored' => (float) ($request->away_team_form['avg_goals_scored'] ?? 0),
+                    'avg_goals_conceded' => (float) ($request->away_team_form['avg_goals_conceded'] ?? 0),
+                    'form_rating' => (float) ($request->away_team_form['form_rating'] ?? 5),
+                    'form_momentum' => (float) ($request->away_team_form['form_momentum'] ?? 0),
+                    'raw_form' => $request->away_team_form['raw_form'] ?? [],
+                ]
+            );
+        }
     }
-    
+
     /**
-     * Update match prediction results from Python
+     * Update head-to-head data.
      */
-    public function updatePrediction(Request $request, $id)
+    private function updateHeadToHead(MatchModel $match, $request): void
     {
-        $match = MatchModel::find($id);
-        
-        if (!$match) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Match not found'
-            ], 404);
+        if ($request->has('head_to_head_stats')) {
+            Head_To_Head::updateOrCreate(
+                ['match_id' => $match->id],
+                [
+                    'stats' => $request->head_to_head_stats,
+                    'home_wins' => (int) ($request->head_to_head_stats['home_wins'] ?? 0),
+                    'away_wins' => (int) ($request->head_to_head_stats['away_wins'] ?? 0),
+                    'draws' => (int) ($request->head_to_head_stats['draws'] ?? 0),
+                    'total_meetings' => (int) ($request->head_to_head_stats['home_wins'] ?? 0) +
+                        (int) ($request->head_to_head_stats['away_wins'] ?? 0) +
+                        (int) ($request->head_to_head_stats['draws'] ?? 0),
+                ]
+            );
         }
-        
-        $validator = Validator::make($request->all(), [
-            'prediction' => 'required|array',
-            'generated_slips' => 'nullable|array',
-            'confidence' => 'nullable|numeric|min:0|max:1',
-            'ml_model_used' => 'nullable|string',
-        ]);
-        
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-        
-        $match->update([
-            'prediction' => $request->prediction,
-            'generated_slips' => $request->generated_slips ?? [],
-            'prediction_confidence' => $request->confidence ?? 0,
-            'ml_model_used' => $request->ml_model_used,
-            'prediction_ready' => true,
-            'prediction_updated_at' => now(),
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Prediction updated successfully',
-            'data' => $match
-        ]);
     }
-    
+
     /**
-     * Search teams
+     * Check if match should be reprocessed for ML.
      */
-    public function searchTeams(Request $request)
+    private function shouldReprocessForML(MatchModel $match, $request): bool
     {
-        $query = $request->get('q');
-        
-        if (strlen($query) < 2) {
-            return response()->json([]);
+        $criticalFields = ['home_team_id', 'away_team_id', 'match_date', 'odds', 'league'];
+
+        foreach ($criticalFields as $field) {
+            if ($request->has($field) && $request->$field != $match->getOriginal($field)) {
+                return true;
+            }
         }
-        
-        $teams = Team::where('name', 'like', "%{$query}%")
-            ->orWhere('code', 'like', "%{$query}%")
-            ->limit(10)
-            ->get();
-        
-        return response()->json($teams);
+
+        return false;
     }
 }

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Team extends Model
 {
@@ -97,24 +98,29 @@ class Team extends Model
     ];
 
     // Relationships
-    public function homeMatches()
+
+    public function homeMatches(): HasMany
     {
-        return $this->hasMany(MatchModel::class, 'home_team_id');
+        return $this->hasMany(\App\Models\MatchModel::class, 'home_team_id');
     }
 
-    public function awayMatches()
+    public function awayMatches(): HasMany
     {
-        return $this->hasMany(MatchModel::class, 'away_team_id');
+        return $this->hasMany(\App\Models\MatchModel::class, 'away_team_id');
     }
-
-    public function matches()
-    {
-        return $this->homeMatches->merge($this->awayMatches);
-    }
-
     public function teamForms()
     {
         return $this->hasMany(Team_Form::class, 'team_id', 'code');
+    }
+
+        /**
+     * Proper unified matches query
+     */
+    public function allMatches()
+    {
+        return \App\Models\MatchModel::query()
+            ->where('home_team_id', $this->id)
+            ->orWhere('away_team_id', $this->id);
     }
 
     // Accessors

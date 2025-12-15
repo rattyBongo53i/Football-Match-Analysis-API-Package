@@ -21,6 +21,30 @@ class MatchModel extends Model
         'sport',
         'home_score',
         'away_score',
+
+        /****
+         * update columns
+         * 
+         */
+        'home_team_id',
+        'away_team_id',
+        'competition',
+        'match_date',
+        'venue',
+        'odds',
+        'weather_conditions',
+        'referee',
+        'importance',
+        'tv_coverage',
+        'predicted_attendance',
+        'for_ml_training',
+        'prediction_ready',
+        // ML columns
+        'analysis_home_win_probability',
+        'analysis_draw_probability',
+        'analysis_away_win_probability',
+        'analysis_confidence',
+        'analysis_prediction'
     ];
 
     // =======================
@@ -28,7 +52,10 @@ class MatchModel extends Model
     // =======================
 
     protected $casts = [
-        'match_date' => 'datetime'
+        'match_date' => 'datetime',
+        'odds' => 'array',
+        'for_ml_training' => 'boolean',
+        'prediction_ready' => 'boolean',
     ];
 
     public function headToHead()
@@ -60,4 +87,19 @@ class MatchModel extends Model
     {
         return $this->hasMany(HistoricalResults::class);
     }
+
+    /*****
+     * addictional relationships
+     */
+
+    public function homeTeam()
+    {
+        return $this->belongsTo(Team::class, 'home_team_id');
+    }
+
+    public function awayTeam()
+    {
+        return $this->belongsTo(Team::class, 'away_team_id');
+    }
+
 }
