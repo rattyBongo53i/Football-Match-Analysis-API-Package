@@ -1,0 +1,203 @@
+{
+  "home_team": "Man Utd",
+  "home_team_code": null,
+  "away_team": "Bournemouth",
+  "away_team_code": null,
+  "league": "Premier League",
+  "competition": "League",
+  "match_date": "2025-12-15",
+  "venue": "Home",
+  "match_time": "20:00",
+  "head_to_head_summary": null,
+  "head_to_head_stats": {
+    "home_wins": "5",
+    "away_wins": "3",
+    "draws": "2",
+    "total_meetings": 0,
+    "last_meeting_result": null,
+    "last_meeting_date": null,
+    "avg_home_goals": 0,
+    "avg_away_goals": 0
+  },
+  "home_team_form": {
+    "raw_form": [
+      {
+        "opponent": "Wolves",
+        "result": "1-4",
+        "outcome": "W"
+      },
+      {
+        "opponent": "West Ham",
+        "result": "1-1",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Crystal Palace",
+        "result": "1-2",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Everton",
+        "result": "0-1",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Tottenham",
+        "result": "2-2",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Nottingham",
+        "result": "2-2",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Brighton",
+        "result": "4-2",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Liverpool",
+        "result": "1-2",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Sunderland",
+        "result": "2-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Brentford",
+        "result": "3-1",
+        "outcome": "L"
+      }
+    ],
+    "form_string": "WDWLDDWWWL",
+    "matches_played": 10,
+    "wins": 5,
+    "draws": 3,
+    "losses": 2,
+    "goals_scored": 17,
+    "goals_conceded": 17,
+    "avg_goals_scored": 1.7,
+    "avg_goals_conceded": 1.7,
+    "clean_sheets": 1,
+    "failed_to_score": 1,
+    "form_rating": 6,
+    "form_momentum": 0.56,
+    "opponent_strength": {
+      "avg_opponent_rank": 0,
+      "strong_opponents": 0,
+      "weak_opponents": 0
+    }
+  },
+  "away_team_form": {
+    "raw_form": [
+      {
+        "opponent": "Chelsea",
+        "result": "0-0",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Everton",
+        "result": "1-0",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Sunderland",
+        "result": "3-2",
+        "outcome": "L"
+      },
+      {
+        "opponent": "West Ham",
+        "result": "2-2",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Aston Villa",
+        "result": "4-0",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Manchester City",
+        "result": "3-1",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Nottingham",
+        "result": "2-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Crystal Palace",
+        "result": "3-3",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Fulham",
+        "result": "3-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Leeds",
+        "result": "2-2",
+        "outcome": "D"
+      }
+    ],
+    "form_string": "DLLDLLWDWD",
+    "matches_played": 10,
+    "wins": 2,
+    "draws": 4,
+    "losses": 4,
+    "goals_scored": 23,
+    "goals_conceded": 11,
+    "avg_goals_scored": 2.3,
+    "avg_goals_conceded": 1.1,
+    "clean_sheets": 4,
+    "failed_to_score": 1,
+    "form_rating": "3.3",
+    "form_momentum": 0,
+    "opponent_strength": {
+      "avg_opponent_rank": 0,
+      "strong_opponents": 0,
+      "weak_opponents": 0
+    }
+  },
+  "odds": {
+    "home_win": "1.86",
+    "draw": "4.20",
+    "away_win": "4.11",
+    "over_2_5": "1.56",
+    "under_2_5": "2.50",
+    "btts_yes": "1.56",
+    "btts_no": "2.45",
+    "double_chance_1x": "1.26",
+    "double_chance_12": "1.25",
+    "double_chance_x2": "1.93",
+    "correct_score_1_0": "10.50",
+    "correct_score_2_0": "10.50",
+    "correct_score_2_1": "8.50",
+    "correct_score_0_0": "18.00",
+    "correct_score_1_1": "7.75",
+    "total_cards_over_2_5": null,
+    "total_cards_under_2_5": null,
+    "total_corners_over_8_5": null,
+    "total_corners_under_8_5": null,
+    "asian_handicap_minus_1": "3.00",
+    "asian_handicap_plus_1": "1.27",
+    "halftime_home": "2.30",
+    "halftime_draw": "2.55",
+    "halftime_away": "4.30",
+    "first_goalscorer_home": null,
+    "first_goalscorer_away": null
+  },
+  "weather_conditions": "Clear",
+  "referee": null,
+  "importance": "regular",
+  "tv_coverage": "local",
+  "predicted_attendance": 0,
+  "for_ml_training": true,
+  "prediction_ready": false,
+  "localId": 1765757201464,
+  "created_at": "2025-12-15T00:06:41.464Z"
+}
