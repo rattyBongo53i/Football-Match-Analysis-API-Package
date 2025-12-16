@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\Api\MatchController;
 use App\Http\Controllers\Api\TeamController;
-use App\Http\Controllers\Api\TeamFormController as ApiTeamFormController;
+// use App\Http\Controllers\Api\TeamFormController as ApiTeamFormController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -11,7 +11,8 @@ use App\Http\Controllers\Api\Head_To_Head_Controller;
 use App\Http\Controllers\Api\SlipController;
 use App\Http\Controllers\Api\GeneratorController;
 use App\Http\Controllers\Api\MarketController;
-// use App\Http\Controllers\HealthController; // Or inline if simple
+use App\Http\Controllers\Api\JobController;
+// use App\Http\Controllers\HealthController; // Or inline if simple 
 
 
 Route::get('/user', function (Request $request) {
@@ -128,3 +129,21 @@ Route::get('markets/{marketId}/outcomes', [MarketController::class, 'outcomes'])
 
 // Add auth middleware if needed, e.g.:
 // Route::middleware('auth:sanctum')->group(function () { ... });
+
+
+
+    // Betslip endpoint
+    Route::get('matches/betslip', [SlipController::class, 'getBetslipMatches']);
+    
+    // Market endpoints
+    Route::get('markets', [MarketController::class, 'index']);
+    
+    // Job/analysis endpoints
+    Route::prefix('jobs')->group(function () {
+        Route::post('analyze-betslip', [JobController::class, 'analyzeBetslip']);
+        Route::get('{jobId}/status', [JobController::class, 'getStatus']);
+        Route::get('{jobId}/results', [JobController::class, 'getResults']);
+    });
+    
+    // Optional: Statistics endpoint
+    Route::get('stats/matches', [\App\Http\Controllers\Api\StatsController::class, 'matches']);

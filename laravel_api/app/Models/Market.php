@@ -18,16 +18,26 @@ class Market extends Model
         'is_active',
         'min_odds',
         'max_odds',
-        'sort_order'
+        'sort_order',
+        'odds',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'min_odds' => 'decimal:3',
-        'max_odds' => 'decimal:3'
+        'max_odds' => 'decimal:3',
+        'odds' => 'array',
     ];
 
     // Relationships
+
+
+    public function matches()
+    {
+        return $this->belongsToMany(MatchModel::class)
+            ->withPivot('market_data')
+            ->withTimestamps();
+    }
     public function outcomes()
     {
         return $this->hasMany(MarketOutcomes::class);

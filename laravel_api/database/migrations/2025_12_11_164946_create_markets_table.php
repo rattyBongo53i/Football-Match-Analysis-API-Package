@@ -10,7 +10,7 @@ return new class extends Migration {
     {
         Schema::create('markets', function (Blueprint $table) {
             $table->id();
-            $table->string('category');
+            $table->string('category');//market_type
             $table->string('name')->unique();
             $table->string('code')->unique();
             $table->text('description')->nullable();

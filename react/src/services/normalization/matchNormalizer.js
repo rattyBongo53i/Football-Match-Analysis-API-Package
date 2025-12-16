@@ -1,3 +1,8 @@
+import {
+  normalizeMarketsForBackend,
+  normalizeMarketsForUI,
+} from "./marketNormalizer";
+
 export const normalizeMatchForBackend = (matchData) => {
   const normalized = {
     ...matchData,

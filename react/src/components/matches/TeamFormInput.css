@@ -1,0 +1,103 @@
+.team-form-input {
+  width: 100%;
+}
+
+.form-section {
+  margin-bottom: 24px;
+}
+
+.team-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.last5-container {
+  margin-bottom: 16px;
+}
+
+.last5-label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.last5-inputs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.result-input {
+  width: 50px;
+  text-align: center;
+}
+
+.result-input input {
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.result-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.result-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.stats-input {
+  width: 100%;
+}
+
+.form-strength {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.form-strength-select {
+  min-width: 200px;
+}
+
+@media (max-width: 768px) {
+  .last5-inputs {
+    flex-wrap: wrap;
+  }
+  
+  .result-input {
+    width: 40px;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-strength {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .form-strength-select {
+    min-width: 100%;
+  }
+}

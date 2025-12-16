@@ -1,0 +1,118 @@
+.matches-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.matches-table {
+  min-width: 800px;
+}
+
+.matches-table .match-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.match-teams {
+  display: flex;
+  flex-direction: column;
+}
+
+.home-team, .away-team {
+  font-weight: 500;
+}
+
+.home-team {
+  color: #1976d2;
+}
+
+.away-team {
+  color: #d32f2f;
+}
+
+.match-score {
+  font-weight: bold;
+  font-size: 1.1em;
+  color: #333;
+}
+
+.match-league {
+  font-size: 12px;
+  color: #666;
+  background-color: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+.match-date {
+  display: flex;
+  flex-direction: column;
+}
+
+.match-time {
+  font-size: 11px;
+  color: #888;
+}
+
+.status-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.status-scheduled {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-ongoing {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
+.status-completed {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-cancelled {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: #666;
+}
+
+.empty-state svg {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+@media (max-width: 768px) {
+  .matches-table {
+    min-width: 100%;
+  }
+  
+  .match-cell {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .actions-cell {
+    flex-direction: column;
+    gap: 4px;
+  }
+}

@@ -11,7 +11,7 @@ return new class extends Migration {
         Schema::create('market_outcomes', function (Blueprint $table) {
             $table->id();
             $table->foreignId('market_id')->constrained('markets')->onDelete('cascade');
-            $table->string('outcome_name');
+            $table->string('outcome_name');//outcome // e.g., '1', 'X', '2', 'Over 2.5'
             $table->string('outcome_label')->nullable();
             $table->string('odds_column')->nullable();
             $table->boolean('is_default')->default(false);

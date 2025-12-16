@@ -1,0 +1,152 @@
+.team-form-display {
+  width: 100%;
+}
+
+.team-card {
+  height: 100%;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  background: white;
+}
+
+.team-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.home-team {
+  color: #1976d2;
+}
+
+.away-team {
+  color: #d32f2f;
+}
+
+.form-section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #666;
+}
+
+.last5-display {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.result-box {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-weight: bold;
+  color: white;
+}
+
+.result-win {
+  background-color: #4caf50;
+}
+
+.result-draw {
+  background-color: #ff9800;
+}
+
+.result-loss {
+  background-color: #f44336;
+}
+
+.result-empty {
+  background-color: #e0e0e0;
+  color: #666;
+}
+
+.form-points {
+  font-size: 12px;
+  color: #666;
+  margin-left: 8px;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.stats-table th {
+  font-weight: 600;
+  color: #666;
+  background-color: #fafafa;
+}
+
+.stats-table tr:last-child th,
+.stats-table tr:last-child td {
+  border-bottom: none;
+}
+
+.form-strength-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.strength-bar {
+  flex: 1;
+  height: 8px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.strength-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.strength-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .team-card {
+    padding: 12px;
+  }
+  
+  .last5-display {
+    flex-wrap: wrap;
+  }
+  
+  .result-box {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+  
+  .form-strength-display {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+}

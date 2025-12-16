@@ -26,13 +26,17 @@ class MatchModel extends Model
          * update columns
          * 
          */
+        'home_form',
+        'away_form',
+        'head_to_head',
+
         'home_team_id',
         'away_team_id',
         'competition',
         'match_date',
         'venue',
         'odds',
-        'weather_conditions',
+        'weather',
         'referee',
         'importance',
         'tv_coverage',
@@ -48,7 +52,7 @@ class MatchModel extends Model
     ];
 
     // =======================
-    //      Relationships
+    //      typecast
     // =======================
 
     protected $casts = [
@@ -56,7 +60,21 @@ class MatchModel extends Model
         'odds' => 'array',
         'for_ml_training' => 'boolean',
         'prediction_ready' => 'boolean',
+        'home_form' => 'array',
+        'away_form' => 'array',
+        'head_to_head' => 'array',
     ];
+        
+    // =======================
+    //      Relationships
+    // =======================
+
+       public function markets()
+    {
+        return $this->belongsToMany(Market::class)
+            ->withPivot('market_data')
+            ->withTimestamps();
+    }
 
     public function headToHead()
     {

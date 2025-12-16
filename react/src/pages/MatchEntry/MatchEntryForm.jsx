@@ -1,54 +1,198 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState,  useEffect, useCallback, useMemo, memo } from 'react';
+import {
+  Box,
+  Button,
+  TextField,
+  Grid,
+  Paper,
+  Typography,
+  Divider,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Alert,
+  IconButton,
+  Card,
+  CardContent
+} from '@mui/material';
+import { Delete as DeleteIcon, Add as AddIcon, SportsSoccer as SoccerIcon } from '@mui/icons-material';
 import { matchService } from '../../services/api/matchService';
+import { useBetslip } from '../../contexts/BetslipContext';
 import { createMarketFormHandler } from '../../utils/marketFormHandler';
-import MarketOddsInput from '../../components/matches/MarketOddsInput';
 import TeamFormInput from '../../components/matches/TeamFormInput';
 import './MatchEntryForm.css';
 
-const MatchEntryForm = ({ matchId, initialData = null }) => {
-  const navigate = useNavigate();
-  const marketHandler = createMarketFormHandler();
-  
-  const [formData, setFormData] = useState({
-    home_team: '',
-    away_team: '',
-    league: '',
-    match_date: new Date().toISOString().split('T')[0],
-    match_time: '15:00',
-    venue: '',
-    referee: '',
-    weather: 'Clear',
-    status: 'scheduled',
-    home_score: null,
-    away_score: null,
-    home_form: {},
-    away_form: {},
-    head_to_head: {},
-    notes: ''
-  });
+// Memoized components
+const MemoizedTextField = memo(TextField);
+const MemoizedSelect = memo(({ children, ...props }) => (
+  <Select {...props}>{children}</Select>
+));
+const MemoizedMenuItem = memo(MenuItem);
+const MemoizedCard = memo(Card);
+const MemoizedIconButton = memo(IconButton);
 
-  const [markets, setMarkets] = useState(marketHandler.getDefaultMarkets());
+// Initial form data
+const INITIAL_FORM_DATA = {
+  home_team: '',
+  away_team: '',
+  league: '',
+  match_date: new Date().toISOString().split('T')[0],
+  match_time: '15:00',
+  venue: '',
+  referee: '',
+  weather: 'Clear',
+  status: 'scheduled',
+  home_score: null,
+  away_score: null,
+  home_form: { last_5: ['', '', '', '', ''] },
+  away_form: { last_5: ['', '', '', '', ''] },
+  head_to_head: { home_wins: 0, away_wins: 0, draws: 0 },
+  notes: ''
+};
+
+const WEATHER_OPTIONS = ['Clear', 'Cloudy', 'Rainy', 'Snow', 'Windy'];
+
+// Separate MarketItem component to fix hook issue
+const MarketItem = memo(({ 
+  market, 
+  index, 
+  marketErrors, 
+  submitting, 
+  onRemoveMarket, 
+  onMarketChange 
+}) => {
+  const is1X2Market = market.name === '1X2';
+  
+  const handleOddsChange = useCallback((field, value) => {
+    const updated = { ...market };
+    if (field === 'odds') {
+      updated.odds = parseFloat(value) || 0;
+    } else {
+      updated[field] = parseFloat(value) || 0;
+    }
+    onMarketChange(index, updated);
+  }, [market, index, onMarketChange]);
+
+  return (
+    <Grid item xs={12} md={6}>
+      <MemoizedCard variant="outlined">
+        <CardContent>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="subtitle1">
+              {market.name} {market.required && '*'}
+            </Typography>
+            {!market.required && (
+              <MemoizedIconButton
+                size="small"
+                onClick={() => onRemoveMarket(index)}
+                disabled={submitting}
+              >
+                <DeleteIcon />
+              </MemoizedIconButton>
+            )}
+          </Box>
+          
+          {is1X2Market ? (
+            <Grid container spacing={2}>
+              <Grid item xs={4}>
+                <MemoizedTextField
+                  fullWidth
+                  label="Home"
+                  type="number"
+                  step="0.01"
+                  min="1.01"
+                  value={market.home_odds || ''}
+                  onChange={(e) => handleOddsChange('home_odds', e.target.value)}
+                  error={!!marketErrors.home_odds}
+                  helperText={marketErrors.home_odds}
+                  disabled={submitting}
+                />
+              </Grid>
+              <Grid item xs={4}>
+                <MemoizedTextField
+                  fullWidth
+                  label="Draw"
+                  type="number"
+                  step="0.01"
+                  min="1.01"
+                  value={market.draw_odds || ''}
+                  onChange={(e) => handleOddsChange('draw_odds', e.target.value)}
+                  error={!!marketErrors.draw_odds}
+                  helperText={marketErrors.draw_odds}
+                  disabled={submitting}
+                />
+              </Grid>
+              <Grid item xs={4}>
+                <MemoizedTextField
+                  fullWidth
+                  label="Away"
+                  type="number"
+                  step="0.01"
+                  min="1.01"
+                  value={market.away_odds || ''}
+                  onChange={(e) => handleOddsChange('away_odds', e.target.value)}
+                  error={!!marketErrors.away_odds}
+                  helperText={marketErrors.away_odds}
+                  disabled={submitting}
+                />
+              </Grid>
+            </Grid>
+          ) : (
+            <MemoizedTextField
+              fullWidth
+              label="Odds"
+              type="number"
+              step="0.01"
+              min="1.01"
+              value={market.odds || ''}
+              onChange={(e) => handleOddsChange('odds', e.target.value)}
+              disabled={submitting}
+            />
+          )}
+        </CardContent>
+      </MemoizedCard>
+    </Grid>
+  );
+});
+
+MarketItem.displayName = 'MarketItem';
+
+const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
+  const marketHandler = useMemo(() => createMarketFormHandler(), []);
+  const { addMatchToBetslip } = useBetslip();
+  
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+  const [markets, setMarkets] = useState(() => marketHandler.getDefaultMarkets());
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [marketErrors, setMarketErrors] = useState({});
+
+  const formStatus = useMemo(() => ({
+    isUpdate: Boolean(matchId),
+    hasErrors: Object.keys(errors).length > 0
+  }), [matchId, errors]);
 
   useEffect(() => {
     if (initialData) {
-      setFormData(initialData);
+      setFormData(prev => ({
+        ...prev,
+        ...initialData
+      }));
+      
       if (initialData.markets) {
         setMarkets(initialData.markets);
       }
     }
   }, [initialData]);
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleInputChange = useCallback((field, value) => {
+    setFormData(prev => {
+      if (prev[field] === value) return prev;
+      return { ...prev, [field]: value };
+    });
     
-    // Clear field error
     if (errors[field]) {
       setErrors(prev => {
         const newErrors = { ...prev };
@@ -56,40 +200,49 @@ const MatchEntryForm = ({ matchId, initialData = null }) => {
         return newErrors;
       });
     }
-  };
+  }, [errors]);
 
-  const handleMarketChange = (index, updatedMarket) => {
+  const handleMarketChange = useCallback((index, updatedMarket) => {
     setMarkets(prev => {
+      const currentMarket = prev[index];
+      if (JSON.stringify(currentMarket) === JSON.stringify(updatedMarket)) {
+        return prev;
+      }
+      
       const newMarkets = [...prev];
       newMarkets[index] = updatedMarket;
       return newMarkets;
     });
-  };
+  }, []);
 
-  const validateForm = () => {
+  const addMarket = useCallback(() => {
+    setMarkets(prev => [
+      ...prev,
+      {
+        id: `market_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+        name: 'Double Chance',
+        market_type: 'double_chance',
+        odds: 0,
+        required: false
+      }
+    ]);
+  }, []);
+
+  const removeMarket = useCallback((index) => {
+    if (!markets[index]?.required) {
+      setMarkets(prev => prev.filter((_, i) => i !== index));
+    }
+  }, [markets]);
+
+  const validateForm = useCallback(() => {
     const newErrors = {};
     
-    if (!formData.home_team.trim()) {
-      newErrors.home_team = 'Home team is required';
-    }
+    if (!formData.home_team.trim()) newErrors.home_team = 'Home team is required';
+    if (!formData.away_team.trim()) newErrors.away_team = 'Away team is required';
+    if (formData.home_team === formData.away_team) newErrors.away_team = 'Teams must be different';
+    if (!formData.league.trim()) newErrors.league = 'League is required';
+    if (!formData.match_date) newErrors.match_date = 'Match date is required';
     
-    if (!formData.away_team.trim()) {
-      newErrors.away_team = 'Away team is required';
-    }
-    
-    if (formData.home_team === formData.away_team) {
-      newErrors.away_team = 'Teams must be different';
-    }
-    
-    if (!formData.league.trim()) {
-      newErrors.league = 'League is required';
-    }
-    
-    if (!formData.match_date) {
-      newErrors.match_date = 'Match date is required';
-    }
-    
-    // Validate markets
     const { isValid: marketsValid, errors: marketValidationErrors } = 
       marketHandler.validateMarkets(markets);
     
@@ -101,17 +254,17 @@ const MatchEntryForm = ({ matchId, initialData = null }) => {
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0 && marketsValid;
-  };
+  }, [formData, markets, marketHandler]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = useCallback(async (e) => {
+    if (e) e.preventDefault();
     
     if (!validateForm()) {
-      alert('Please fix the errors in the form');
-      return;
+      return null;
     }
     
     setSubmitting(true);
+    setSuccess(false);
     
     try {
       const matchData = {
@@ -122,264 +275,286 @@ const MatchEntryForm = ({ matchId, initialData = null }) => {
       let savedMatch;
       if (matchId) {
         savedMatch = await matchService.updateMatch(matchId, matchData);
-        alert('Match updated successfully!');
       } else {
         savedMatch = await matchService.createMatch(matchData);
-        alert('Match saved successfully!');
       }
       
-      // Navigate to match details
-      navigate(`/matches/${savedMatch.id}`);
+      setSuccess(true);
+      
+      if (onSuccess) {
+        setTimeout(() => onSuccess(), 1500);
+      }
+      
+      return savedMatch;
     } catch (error) {
       console.error('Error saving match:', error);
-      alert('Failed to save match. Please try again.');
+      setErrors(prev => ({ ...prev, submit: 'Failed to save match. Please try again.' }));
+      return null;
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [formData, markets, matchId, marketHandler, validateForm, onSuccess]);
 
-  const handleCancel = () => {
-    if (window.confirm('Are you sure you want to cancel? Unsaved changes will be lost.')) {
-      navigate('/matches');
+  const handleSaveAndAddToBetslip = useCallback(async (e) => {
+    if (e) e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
     }
-  };
+    
+    setSubmitting(true);
+    
+    try {
+      const savedMatch = await handleSubmit();
+      if (savedMatch) {
+        await addMatchToBetslip(savedMatch);
+        setSuccess(true);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [validateForm, handleSubmit, addMatchToBetslip]);
+
+  // Input handlers
+  const handleHomeTeamChange = useCallback((e) => 
+    handleInputChange('home_team', e.target.value), [handleInputChange]);
+  
+  const handleAwayTeamChange = useCallback((e) => 
+    handleInputChange('away_team', e.target.value), [handleInputChange]);
+  
+  const handleLeagueChange = useCallback((e) => 
+    handleInputChange('league', e.target.value), [handleInputChange]);
+  
+  const handleMatchDateChange = useCallback((e) => 
+    handleInputChange('match_date', e.target.value), [handleInputChange]);
+  
+  const handleMatchTimeChange = useCallback((e) => 
+    handleInputChange('match_time', e.target.value), [handleInputChange]);
+  
+  const handleVenueChange = useCallback((e) => 
+    handleInputChange('venue', e.target.value), [handleInputChange]);
+  
+  const handleRefereeChange = useCallback((e) => 
+    handleInputChange('referee', e.target.value), [handleInputChange]);
+  
+  const handleWeatherChange = useCallback((e) => 
+    handleInputChange('weather', e.target.value), [handleInputChange]);
 
   return (
-    <div className="match-entry-form-container">
-      <form onSubmit={handleSubmit} className="match-entry-form">
-        <div className="form-header">
-          <h2>{matchId ? 'Edit Match' : 'Add New Match'}</h2>
-          <div className="form-actions">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="btn-secondary"
-              disabled={submitting}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={submitting}
-            >
-              {submitting ? 'Saving...' : (matchId ? 'Update Match' : 'Save Match')}
-            </button>
-          </div>
-        </div>
+    <Paper elevation={2} sx={{ p: 3 }}>
+      <form onSubmit={handleSubmit}>
+        {success && (
+          <Alert severity="success" sx={{ mb: 3 }}>
+            Match saved successfully!
+          </Alert>
+        )}
+        
+        {errors.submit && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {errors.submit}
+          </Alert>
+        )}
 
-        <div className="form-grid">
-          {/* Basic Match Info */}
-          <div className="form-section">
-            <h3>🏟️ Match Information</h3>
-            
-            <div className="form-group">
-              <label htmlFor="home_team">Home Team *</label>
-              <input
-                id="home_team"
-                type="text"
+        {/* Match Information Section */}
+        <Box mb={4}>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SoccerIcon /> Match Information
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+          
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={5}>
+              <MemoizedTextField
+                fullWidth
+                label="Home Team *"
                 value={formData.home_team}
-                onChange={(e) => handleInputChange('home_team', e.target.value)}
-                className={errors.home_team ? 'error' : ''}
-                placeholder="Enter home team name"
+                onChange={handleHomeTeamChange}
+                error={!!errors.home_team}
+                helperText={errors.home_team}
+                disabled={submitting}
               />
-              {errors.home_team && (
-                <span className="error-message">{errors.home_team}</span>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="away_team">Away Team *</label>
-              <input
-                id="away_team"
-                type="text"
-                value={formData.away_team}
-                onChange={(e) => handleInputChange('away_team', e.target.value)}
-                className={errors.away_team ? 'error' : ''}
-                placeholder="Enter away team name"
-              />
-              {errors.away_team && (
-                <span className="error-message">{errors.away_team}</span>
-              )}
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="league">League *</label>
-                <input
-                  id="league"
-                  type="text"
-                  value={formData.league}
-                  onChange={(e) => handleInputChange('league', e.target.value)}
-                  className={errors.league ? 'error' : ''}
-                  placeholder="e.g., Premier League"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="match_date">Match Date *</label>
-                <input
-                  id="match_date"
-                  type="date"
-                  value={formData.match_date}
-                  onChange={(e) => handleInputChange('match_date', e.target.value)}
-                  className={errors.match_date ? 'error' : ''}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="match_time">Match Time</label>
-                <input
-                  id="match_time"
-                  type="time"
-                  value={formData.match_time}
-                  onChange={(e) => handleInputChange('match_time', e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="venue">Venue</label>
-                <input
-                  id="venue"
-                  type="text"
-                  value={formData.venue}
-                  onChange={(e) => handleInputChange('venue', e.target.value)}
-                  placeholder="Stadium name"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="referee">Referee</label>
-                <input
-                  id="referee"
-                  type="text"
-                  value={formData.referee}
-                  onChange={(e) => handleInputChange('referee', e.target.value)}
-                  placeholder="Referee name"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="weather">Weather</label>
-                <select
-                  id="weather"
-                  value={formData.weather}
-                  onChange={(e) => handleInputChange('weather', e.target.value)}
-                >
-                  <option value="Clear">Clear</option>
-                  <option value="Cloudy">Cloudy</option>
-                  <option value="Rainy">Rainy</option>
-                  <option value="Snow">Snow</option>
-                  <option value="Windy">Windy</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Team Forms */}
-          <div className="form-section">
-            <h3>📈 Team Forms</h3>
-            <TeamFormInput
-              homeForm={formData.home_form}
-              awayForm={formData.away_form}
-              onChange={(homeForm, awayForm) => {
-                handleInputChange('home_form', homeForm);
-                handleInputChange('away_form', awayForm);
-              }}
-            />
-          </div>
-
-          {/* Market Odds - CRITICAL SECTION */}
-          <div className="form-section">
-            <h3>🎯 Market Odds *</h3>
-            <div className="market-odds-section">
-              {markets.map((market, index) => (
-                <div key={market.id} className="market-card">
-                  <div className="market-header">
-                    <h4>{market.name} {market.required && '*'}</h4>
-                    {!market.required && (
-                      <button
-                        type="button"
-                        className="btn-remove-market"
-                        onClick={() => {
-                          setMarkets(prev => prev.filter((_, i) => i !== index));
-                        }}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                  
-                  <MarketOddsInput
-                    market={market}
-                    onChange={(updatedMarket) => handleMarketChange(index, updatedMarket)}
-                    errors={marketErrors}
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Add More Markets Button */}
-            <button
-              type="button"
-              className="btn-add-market"
-              onClick={() => {
-                setMarkets(prev => [
-                  ...prev,
-                  {
-                    id: `market_${Date.now()}`,
-                    name: 'Double Chance',
-                    market_type: 'double_chance',
-                    odds: 0,
-                    required: false
-                  }
-                ]);
-              }}
-            >
-              + Add Another Market
-            </button>
-          </div>
-
-          {/* Additional Info */}
-          <div className="form-section">
-            <h3>📝 Additional Information</h3>
+            </Grid>
             
-            <div className="form-group">
-              <label htmlFor="head_to_head">Head to Head (JSON)</label>
-              <textarea
-                id="head_to_head"
-                value={JSON.stringify(formData.head_to_head, null, 2)}
-                onChange={(e) => {
-                  try {
-                    const parsed = JSON.parse(e.target.value);
-                    handleInputChange('head_to_head', parsed);
-                  } catch {
-                    // Keep as string if invalid JSON
-                    handleInputChange('head_to_head', {});
-                  }
-                }}
-                rows="4"
-                placeholder='{"last_5_meetings": [], "home_wins": 0, "away_wins": 0, "draws": 0}'
+            <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Typography variant="h5" color="text.secondary">
+                VS
+              </Typography>
+            </Grid>
+            
+            <Grid item xs={12} md={5}>
+              <MemoizedTextField
+                fullWidth
+                label="Away Team *"
+                value={formData.away_team}
+                onChange={handleAwayTeamChange}
+                error={!!errors.away_team}
+                helperText={errors.away_team}
+                disabled={submitting}
               />
-            </div>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <MemoizedTextField
+                fullWidth
+                label="League *"
+                value={formData.league}
+                onChange={handleLeagueChange}
+                error={!!errors.league}
+                helperText={errors.league}
+                disabled={submitting}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={3}>
+              <MemoizedTextField
+                fullWidth
+                label="Match Date *"
+                type="date"
+                value={formData.match_date}
+                onChange={handleMatchDateChange}
+                error={!!errors.match_date}
+                helperText={errors.match_date}
+                disabled={submitting}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={3}>
+              <MemoizedTextField
+                fullWidth
+                label="Match Time"
+                type="time"
+                value={formData.match_time}
+                onChange={handleMatchTimeChange}
+                disabled={submitting}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
+              <MemoizedTextField
+                fullWidth
+                label="Venue"
+                value={formData.venue}
+                onChange={handleVenueChange}
+                disabled={submitting}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
+              <MemoizedTextField
+                fullWidth
+                label="Referee"
+                value={formData.referee}
+                onChange={handleRefereeChange}
+                disabled={submitting}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Weather</InputLabel>
+                <MemoizedSelect
+                  value={formData.weather}
+                  onChange={handleWeatherChange}
+                  label="Weather"
+                  disabled={submitting}
+                >
+                  {WEATHER_OPTIONS.map(option => (
+                    <MemoizedMenuItem key={option} value={option}>
+                      {option}
+                    </MemoizedMenuItem>
+                  ))}
+                </MemoizedSelect>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </Box>
 
-            <div className="form-group">
-              <label htmlFor="notes">Notes</label>
-              <textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => handleInputChange('notes', e.target.value)}
-                rows="3"
-                placeholder="Additional notes about this match..."
+        {/* Team Forms Section */}
+        <Box mb={4}>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AddIcon /> Team Forms
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+          <TeamFormInput
+            homeForm={formData.home_form}
+            awayForm={formData.away_form}
+            onChange={(homeForm, awayForm) => {
+              handleInputChange('home_form', homeForm);
+              handleInputChange('away_form', awayForm);
+            }}
+            disabled={submitting}
+          />
+        </Box>
+
+        {/* Market Odds Section */}
+        <Box mb={4}>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AddIcon /> Market Odds *
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+          
+          <Grid container spacing={3}>
+            {markets.map((market, index) => (
+              <MarketItem
+                key={market.id}
+                market={market}
+                index={index}
+                marketErrors={marketErrors}
+                submitting={submitting}
+                onRemoveMarket={removeMarket}
+                onMarketChange={handleMarketChange}
               />
-            </div>
-          </div>
-        </div>
+            ))}
+          </Grid>
+          
+          <Button
+            startIcon={<AddIcon />}
+            onClick={addMarket}
+            sx={{ mt: 2 }}
+            disabled={submitting}
+          >
+            Add Another Market
+          </Button>
+        </Box>
+
+        {/* Actions Section */}
+        <Box display="flex" justifyContent="space-between" alignItems="center" mt={4}>
+          <Button
+            variant="outlined"
+            onClick={() => window.history.back()}
+            disabled={submitting}
+          >
+            Cancel
+          </Button>
+          
+          <Box display="flex" gap={2}>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={submitting}
+            >
+              {submitting ? 'Saving...' : (formStatus.isUpdate ? 'Update Match' : 'Save Match')}
+            </Button>
+            
+            {!formStatus.isUpdate && (
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleSaveAndAddToBetslip}
+                disabled={submitting}
+              >
+                Save & Add to Betslip
+              </Button>
+            )}
+          </Box>
+        </Box>
       </form>
-    </div>
+    </Paper>
   );
 };
 
-export default MatchEntryForm;
+export default memo(MatchEntryForm);

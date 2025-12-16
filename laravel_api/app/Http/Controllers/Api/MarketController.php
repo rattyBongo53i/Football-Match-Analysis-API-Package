@@ -2,249 +2,154 @@
 
 namespace App\Http\Controllers\Api;
 
-
 use App\Http\Controllers\Controller;
 use App\Models\Market;
-use App\Models\Outcome;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 
 class MarketController extends Controller
 {
     /**
-     * Display a listing of markets.
+     * Get all active markets
+     * 
+     * Endpoint: GET /api/markets
+     * 
+     * @return JsonResponse
      */
-    public function index(Request $request): JsonResponse
+    public function index(): JsonResponse
     {
         try {
-            // Get pagination parameter from request or use default
-            $perPage = $request->get('per_page', 15);
+            // Get only active markets
+            $markets = Market::where('is_active', true)
+                ->with('outcomes')
+                ->orderBy('name')
+                ->get();
             
-            // Query markets with optional search/filter
-            $query = Market::query();
-            
-            // Apply search filter if provided
-            if ($request->has('search')) {
-                $search = $request->get('search');
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
-            }
-            
-            // Apply sorting
-            $sortBy = $request->get('sort_by', 'created_at');
-            $sortOrder = $request->get('sort_order', 'desc');
-            $query->orderBy($sortBy, $sortOrder);
-            
-            // Paginate results
-            $markets = $query->paginate($perPage);
+            // Transform to frontend format
+            $transformedMarkets = $markets->map(function ($market) {
+                return $this->transformMarket($market);
+            });
             
             return response()->json([
-                'success' => true,
-                'data' => $markets->items(),
-                'meta' => [
-                    'current_page' => $markets->currentPage(),
-                    'last_page' => $markets->lastPage(),
-                    'per_page' => $markets->perPage(),
-                    'total' => $markets->total(),
-                ],
+                'data' => $transformedMarkets
             ]);
             
         } catch (\Exception $e) {
+            Log::error('Error fetching markets', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve markets',
-                'error' => config('app.debug') ? $e->getMessage() : null,
+                'error' => 'Failed to fetch markets'
             ], 500);
         }
     }
-
+    
     /**
-     * Store a newly created market.
+     * Transform market for frontend consumption
+     * 
+     * @param Market $market
+     * @return array
      */
-    public function store(Request $request): JsonResponse
+    private function transformMarket(Market $market): array
     {
-        try {
-            // Validate request based on existing market schema
-            $validator = Validator::make($request->all(), [
-                'name' => 'required|string|max:255|unique:markets,name',
-                'description' => 'nullable|string',
-                // Add other fields that exist in markets table
-            ]);
-            
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-            
-            // Create market with only validated fields
-            $market = Market::create($validator->validated());
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Market created successfully',
-                'data' => $market,
-            ], 201);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create market',
-                'error' => config('app.debug') ? $e->getMessage() : null,
-            ], 500);
+        $baseData = [
+            'id' => $market->id,
+            'name' => $market->name,
+            'market_type' => $market->market_type,
+            'is_active' => (bool) $market->is_active,
+            'created_at' => $market->created_at->toISOString(),
+            'updated_at' => $market->updated_at->toISOString()
+        ];
+        
+        // Add display name based on market type
+        $baseData['display_name'] = $this->getDisplayName($market->name);
+        
+        // Add description
+        $baseData['description'] = $this->getDescription($market->name);
+        
+        // Add outcome structure based on market type
+        $baseData['outcome_structure'] = $this->getOutcomeStructure($market->name);
+        
+        // Add odds structure if available
+        if ($market->odds) {
+            $baseData['odds_structure'] = $market->odds;
         }
+        
+        // Add outcomes if loaded
+        if ($market->relationLoaded('outcomes') && $market->outcomes->isNotEmpty()) {
+            $baseData['outcomes'] = $market->outcomes->map(function ($outcome) {
+                return [
+                    'outcome' => $outcome->outcome,
+                    'odds' => (float) $outcome->odds
+                ];
+            });
+        }
+        
+        return $baseData;
     }
-
+    
     /**
-     * Display the specified market.
+     * Get display name for market
+     * 
+     * @param string $marketName
+     * @return string
      */
-    public function show(string $id): JsonResponse
+    private function getDisplayName(string $marketName): string
     {
-        try {
-            $market = Market::findOrFail($id);
-            
-            return response()->json([
-                'success' => true,
-                'data' => $market,
-            ]);
-            
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Market not found',
-            ], 404);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve market',
-                'error' => config('app.debug') ? $e->getMessage() : null,
-            ], 500);
-        }
+        $displayNames = [
+            'match_result' => '1X2',
+            'over_under_2_5' => 'Over/Under 2.5',
+            'both_teams_score' => 'Both Teams to Score',
+            'double_chance' => 'Double Chance',
+            'correct_score' => 'Correct Score',
+            'asian_handicap' => 'Asian Handicap',
+            'half_time_full_time' => 'HT/FT'
+        ];
+        
+        return $displayNames[$marketName] ?? ucfirst(str_replace('_', ' ', $marketName));
     }
-
+    
     /**
-     * Update the specified market.
+     * Get description for market
+     * 
+     * @param string $marketName
+     * @return string
      */
-    public function update(Request $request, string $id): JsonResponse
+    private function getDescription(string $marketName): string
     {
-        try {
-            $market = Market::findOrFail($id);
-            
-            // Validate request
-            $validator = Validator::make($request->all(), [
-                'name' => 'sometimes|required|string|max:255|unique:markets,name,' . $id,
-                'description' => 'nullable|string',
-                // Add other updatable fields
-            ]);
-            
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-            
-            // Update market with validated fields
-            $market->update($validator->validated());
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Market updated successfully',
-                'data' => $market,
-            ]);
-            
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Market not found',
-            ], 404);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update market',
-                'error' => config('app.debug') ? $e->getMessage() : null,
-            ], 500);
-        }
+        $descriptions = [
+            'match_result' => 'Predict the match result: Home win (1), Draw (X), or Away win (2)',
+            'over_under_2_5' => 'Predict whether the total goals in the match will be over or under 2.5',
+            'both_teams_score' => 'Predict whether both teams will score at least one goal',
+            'double_chance' => 'Predict two possible outcomes from three: 1X (Home or Draw), 12 (Home or Away), X2 (Draw or Away)',
+            'correct_score' => 'Predict the exact final score of the match',
+            'asian_handicap' => 'Bet with a handicap applied to level the playing field between teams',
+            'half_time_full_time' => 'Predict the result at half time and full time'
+        ];
+        
+        return $descriptions[$marketName] ?? 'Betting market for ' . str_replace('_', ' ', $marketName);
     }
-
+    
     /**
-     * Remove the specified market.
+     * Get outcome structure for market
+     * 
+     * @param string $marketName
+     * @return array
      */
-    public function destroy(string $id): JsonResponse
+    private function getOutcomeStructure(string $marketName): array
     {
-        try {
-            $market = Market::findOrFail($id);
-            
-            // Check if market has outcomes before deleting
-            if ($market->outcomes()->exists()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot delete market with existing outcomes',
-                ], 422);
-            }
-            
-            // Check if using soft deletes (if Market uses SoftDeletes trait)
-            if (method_exists($market, 'delete')) {
-                $market->delete();
-                $message = 'Market deleted successfully';
-            } else {
-                $market->forceDelete();
-                $message = 'Market permanently deleted';
-            }
-            
-            return response()->json([
-                'success' => true,
-                'message' => $message,
-            ]);
-            
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Market not found',
-            ], 404);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete market',
-                'error' => config('app.debug') ? $e->getMessage() : null,
-            ], 500);
-        }
-    }
-
-    /**
-     * Get outcomes for a specific market.
-     */
-    public function outcomes(string $marketId): JsonResponse
-    {
-        try {
-            $market = Market::findOrFail($marketId);
-            
-            // Use the relationship to get outcomes
-            $outcomes = $market->outcomes()->get();
-            
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'market' => $market,
-                    'outcomes' => $outcomes,
-                ],
-            ]);
-            
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Market not found',
-            ], 404);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve market outcomes',
-                'error' => config('app.debug') ? $e->getMessage() : null,
-            ], 500);
-        }
+        $structures = [
+            'match_result' => ['1', 'X', '2'],
+            'over_under_2_5' => ['Over 2.5', 'Under 2.5'],
+            'both_teams_score' => ['Yes', 'No'],
+            'double_chance' => ['1X', '12', 'X2'],
+            'correct_score' => ['0-0', '1-0', '0-1', '1-1', '2-0', '0-2', '2-1', '1-2', '2-2', '3-0', '0-3', '3-1', '1-3', '3-2', '2-3', '3-3'],
+            'asian_handicap' => ['Home', 'Away'],
+            'half_time_full_time' => ['1/1', '1/X', '1/2', 'X/1', 'X/X', 'X/2', '2/1', '2/X', '2/2']
+        ];
+        
+        return $structures[$marketName] ?? [];
     }
 }

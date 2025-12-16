@@ -13,7 +13,7 @@ return new class extends Migration {
             $table->foreignId('match_id')->constrained('matches')->onDelete('cascade');
             $table->foreignId('market_id')->constrained('markets')->onDelete('cascade');
             $table->decimal('odds', 8, 3)->nullable();
-            $table->json('additional_data')->nullable();
+            $table->json('additional_data')->nullable();//market_data
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 

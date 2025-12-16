@@ -17,10 +17,13 @@ class MarketOutcomes extends Model
         'outcome_label',
         'odds_column',
         'is_default',
-        'sort_order'
+        'sort_order',
+        'odds'
     ];
 
-    protected $casts = ['is_default' => 'boolean'];
+    protected $casts = ['is_default' => 'boolean',
+              'odds' => 'decimal:2',
+     ];
 
     // Relationships
     public function market()
