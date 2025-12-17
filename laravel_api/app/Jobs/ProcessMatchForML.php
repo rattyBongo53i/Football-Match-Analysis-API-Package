@@ -9,12 +9,10 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use App\Models\MatchModel;
 use App\Models\Team_Form;
 use App\Models\Head_To_Head;
-use App\Models\Prediction;
 use App\Services\PredictionService;
 
 class ProcessMatchForML implements ShouldQueue
@@ -37,7 +35,7 @@ class ProcessMatchForML implements ShouldQueue
         $this->matchId = $matchId;
         $this->processType = $processType;
         $this->options = $options;
-        
+
         $this->onQueue(config('python.queues.ml_processing', 'ml_processing'));
     }
 
@@ -54,7 +52,7 @@ class ProcessMatchForML implements ShouldQueue
 
         try {
             $match = MatchModel::with(['homeTeam', 'awayTeam'])->find($this->matchId);
-            
+
             if (!$match) {
                 throw new \Exception("Match not found: {$this->matchId}");
             }
@@ -63,15 +61,15 @@ class ProcessMatchForML implements ShouldQueue
                 case 'form_analysis':
                     $this->processFormAnalysis($match);
                     break;
-                    
+
                 case 'head_to_head':
                     $this->processHeadToHead($match);
                     break;
-                    
+
                 case 'prediction':
                     $this->processPrediction($match, $predictionService);
                     break;
-                    
+
                 case 'full':
                 default:
                     $this->processFullAnalysis($match, $predictionService);
@@ -89,7 +87,7 @@ class ProcessMatchForML implements ShouldQueue
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             throw $e; // Let Laravel handle retry
         }
     }
@@ -107,39 +105,42 @@ class ProcessMatchForML implements ShouldQueue
 
         // Process home team form
         $this->updateTeamForm($match->homeTeam, 'home', $match);
-        
+
         // Process away team form
         $this->updateTeamForm($match->awayTeam, 'away', $match);
-        
+
         Log::info('Form analysis completed', ['match_id' => $match->id]);
     }
 
     /**
-     * Update team form record
+     * Update team form record using team ID
      */
     protected function updateTeamForm($team, string $venue, MatchModel $match)
     {
-        if (!$team) {
-            Log::warning('Team not found for form analysis', [
+        if (!$team || !$team->id) {
+            Log::warning('Team not found or missing ID for form analysis', [
                 'match_id' => $match->id,
                 'venue' => $venue,
             ]);
             return;
         }
 
-        // Get recent matches for this team at this venue
-        $recentMatches = MatchModel::where(function($query) use ($team, $venue) {
+        $teamId = $team->id;
+
+        // Get recent completed matches where this team played in the correct venue
+        $recentMatches = MatchModel::where(function ($query) use ($teamId, $venue) {
             if ($venue === 'home') {
-                $query->where('home_team_code', $team->code);
+                $query->where('home_team_id', $teamId);
             } else {
-                $query->where('away_team_code', $team->code);
+                $query->where('away_team_id', $teamId);
             }
         })
-        ->where('match_date', '<', $match->match_date)
-        ->whereNotNull('result')
-        ->orderBy('match_date', 'desc')
-        ->limit(5)
-        ->get();
+            ->where('match_date', '<', $match->match_date)
+            ->whereNotNull('home_score')   // ← Added
+            ->whereNotNull('away_score')   // ← Added
+            ->orderBy('match_date', 'desc')
+            ->limit(10) // Increased to 10 for better momentum calculation
+            ->get();
 
         $rawForm = [];
         $matchesPlayed = 0;
@@ -152,20 +153,22 @@ class ProcessMatchForML implements ShouldQueue
         $failedToScore = 0;
 
         foreach ($recentMatches as $recentMatch) {
-            $isHomeTeam = $recentMatch->home_team_code === $team->code;
-            
-            // Determine outcome
-            $homeScore = (int)explode('-', $recentMatch->result)[0];
-            $awayScore = (int)explode('-', $recentMatch->result)[1];
-            
-            if ($isHomeTeam) {
-                $teamScore = $homeScore;
-                $opponentScore = $awayScore;
-            } else {
-                $teamScore = $awayScore;
-                $opponentScore = $homeScore;
+            $isHome = $recentMatch->home_team_id === $teamId;
+
+            // Parse result (e.g., "2-1")
+            if (!$recentMatch->result || !str_contains($recentMatch->result, '-')) {
+                continue;
             }
-            
+
+            $homeScore = (int) $recentMatch->home_score;
+            $awayScore = (int) $recentMatch->away_score;
+
+            // Build result string for raw_form (optional, for consistency)
+            $resultString = "{$homeScore}-{$awayScore}";
+
+            $teamScore = $isHome ? $homeScore : $awayScore;
+            $opponentScore = $isHome ? $awayScore : $homeScore;
+
             // Determine outcome
             $outcome = 'D';
             if ($teamScore > $opponentScore) {
@@ -177,62 +180,56 @@ class ProcessMatchForML implements ShouldQueue
             } else {
                 $draws++;
             }
-            
+
             $goalsScored += $teamScore;
             $goalsConceded += $opponentScore;
-            
+
             if ($teamScore === 0) $failedToScore++;
             if ($opponentScore === 0) $cleanSheets++;
-            
+
             $matchesPlayed++;
-            
+
             $rawForm[] = [
                 'match_id' => $recentMatch->id,
-                'date' => $recentMatch->match_date,
-                'result' => $recentMatch->result,
+                'date' => $recentMatch->match_date->toDateString(),
+                'result' => $resultString,
                 'outcome' => $outcome,
-                'venue' => $isHomeTeam ? 'home' : 'away',
-                'opponent' => $isHomeTeam ? $recentMatch->away_team : $recentMatch->home_team,
+                'venue' => $isHome ? 'home' : 'away',
+                'opponent' => $isHome ? $recentMatch->away_team : $recentMatch->home_team,
                 'goals_scored' => $teamScore,
                 'goals_conceded' => $opponentScore,
             ];
         }
 
         // Calculate averages
-        $avgGoalsScored = $matchesPlayed > 0 ? $goalsScored / $matchesPlayed : 0;
-        $avgGoalsConceded = $matchesPlayed > 0 ? $goalsConceded / $matchesPlayed : 0;
+        $avgGoalsScored = $matchesPlayed > 0 ? round($goalsScored / $matchesPlayed, 2) : 0.0;
+        $avgGoalsConceded = $matchesPlayed > 0 ? round($goalsConceded / $matchesPlayed, 2) : 0.0;
 
-        // Calculate form rating (simplified)
-        $formRating = 5.0; // Base rating
+        // Form rating (0–10 scale)
+        $formRating = 5.0;
         if ($matchesPlayed > 0) {
-            $winRate = $wins / $matchesPlayed;
-            $drawRate = $draws / $matchesPlayed;
-            $lossRate = $losses / $matchesPlayed;
-            
-            // Weight recent form more heavily
-            $formRating = ($winRate * 8) + ($drawRate * 5) + ($lossRate * 2);
+            $pointsPerGame = ($wins * 3 + $draws) / $matchesPlayed;
+            $formRating = round(2.5 + ($pointsPerGame * 2.5), 2); // Maps 0–3 PPG to ~2.5–10
         }
 
-        // Calculate form momentum (simplified)
+        // Momentum: compare last 3 vs previous 3
         $formMomentum = 0.0;
-        if (count($rawForm) >= 3) {
+        if (count($rawForm) >= 6) {
             $lastThree = array_slice($rawForm, 0, 3);
-            $previousThree = array_slice($rawForm, 3, 3);
-            
-            if (count($previousThree) >= 3) {
-                $currentPoints = $this->calculatePoints($lastThree);
-                $previousPoints = $this->calculatePoints($previousThree);
-                $formMomentum = ($currentPoints - $previousPoints) / 9; // Normalize to -1 to 1
-            }
+            $prevThree = array_slice($rawForm, 3, 3);
+            $currentPoints = $this->calculatePoints($lastThree);
+            $previousPoints = $this->calculatePoints($prevThree);
+            $formMomentum = round(($currentPoints - $previousPoints) / 9, 3); // -1 to +1
+        } elseif (count($rawForm) >= 3) {
+            $formMomentum = round($this->calculatePoints(array_slice($rawForm, 0, 3)) / 9, 3);
         }
 
-        // Build form string
-        $formString = '';
-        foreach (array_slice($rawForm, 0, 5) as $matchData) {
-            $formString .= $matchData['outcome'] ?? '';
-        }
+        // Form string (last 5 results)
+        $formString = collect(array_slice($rawForm, 0, 5))
+            ->pluck('outcome')
+            ->implode('');
 
-        // Create or update team form record
+        // Update or create team form
         Team_Form::updateOrCreate(
             [
                 'match_id' => $match->id,
@@ -247,23 +244,24 @@ class ProcessMatchForML implements ShouldQueue
                 'losses' => $losses,
                 'goals_scored' => $goalsScored,
                 'goals_conceded' => $goalsConceded,
-                'avg_goals_scored' => round($avgGoalsScored, 2),
-                'avg_goals_conceded' => round($avgGoalsConceded, 2),
-                'form_rating' => round($formRating, 2),
-                'form_momentum' => round($formMomentum, 3),
+                'avg_goals_scored' => $avgGoalsScored,
+                'avg_goals_conceded' => $avgGoalsConceded,
+                'form_rating' => $formRating,
+                'form_momentum' => $formMomentum,
                 'clean_sheets' => $cleanSheets,
                 'failed_to_score' => $failedToScore,
                 'form_string' => $formString,
-                'win_probability' => $matchesPlayed > 0 ? round($wins / $matchesPlayed, 3) : 0.33,
-                'draw_probability' => $matchesPlayed > 0 ? round($draws / $matchesPlayed, 3) : 0.33,
-                'loss_probability' => $matchesPlayed > 0 ? round($losses / $matchesPlayed, 3) : 0.33,
+                'win_probability' => $matchesPlayed > 0 ? round($wins / $matchesPlayed, 3) : 0.333,
+                'draw_probability' => $matchesPlayed > 0 ? round($draws / $matchesPlayed, 3) : 0.333,
+                'loss_probability' => $matchesPlayed > 0 ? round($losses / $matchesPlayed, 3) : 0.334,
             ]
         );
 
         Log::debug('Team form updated', [
-            'team_id' => $team->code,
+            'team_code' => $team->code,
             'venue' => $venue,
             'form_rating' => $formRating,
+            'form_momentum' => $formMomentum,
             'matches_played' => $matchesPlayed,
         ]);
     }
@@ -282,144 +280,108 @@ class ProcessMatchForML implements ShouldQueue
                 case 'D':
                     $points += 1;
                     break;
-                case 'L':
-                    $points += 0;
-                    break;
             }
         }
         return $points;
     }
 
     /**
-     * Process head-to-head analysis
+     * Process head-to-head analysis using team IDs
      */
-    protected function processHeadToHead(MatchModel $match)
-    {
-        Log::info('Processing head-to-head analysis', [
-            'match_id' => $match->id,
-            'home_team' => $match->home_team,
-            'away_team' => $match->away_team,
-        ]);
+// Inside processHeadToHead() — replace the entire historicalMatches query and loop
 
-        // Find historical matches between these teams
-        $historicalMatches = MatchModel::where(function ($query) use ($match) {
-            $query->where('home_team_code', $match->home_team_code)
-                ->where('away_team_code', $match->away_team_code);
-        })->orWhere(function ($query) use ($match) {
-            $query->where('home_team_code', $match->away_team_code)
-                ->where('away_team_code', $match->home_team_code);
-        })
-        ->where('id', '!=', $match->id)
-        ->whereNotNull('result')
-        ->orderBy('match_date', 'desc')
-        ->limit(20)
-        ->get();
+protected function processHeadToHead(MatchModel $match)
+{
+Log::info('Processing head-to-head analysis', [
+'match_id' => $match->id,
+'home_team' => $match->home_team,
+'away_team' => $match->away_team,
+]);
 
-        $homeWins = 0;
-        $awayWins = 0;
-        $draws = 0;
-        $homeGoals = 0;
-        $awayGoals = 0;
-        $lastMeetings = [];
+$homeTeamId = $match->home_team_id;
+$awayTeamId = $match->away_team_id;
 
-        foreach ($historicalMatches as $historical) {
-            $isHomeTeamCurrentHome = $historical->home_team_code === $match->home_team_code;
-            $scores = explode('-', $historical->result);
-            $homeScore = (int)trim($scores[0]);
-            $awayScore = (int)trim($scores[1]);
+// Find historical completed matches between these two teams
+$historicalMatches = MatchModel::where(function ($query) use ($homeTeamId, $awayTeamId) {
+$query->where('home_team_id', $homeTeamId)
+->where('away_team_id', $awayTeamId);
+})->orWhere(function ($query) use ($homeTeamId, $awayTeamId) {
+$query->where('home_team_id', $awayTeamId)
+->where('away_team_id', $homeTeamId);
+})
+->where('id', '!=', $match->id)
+->whereNotNull('home_score') // ← Fixed: check actual score columns
+->whereNotNull('away_score') // ← Fixed
+->orderBy('match_date', 'desc')
+->limit(20)
+->get();
 
-            if ($homeScore > $awayScore) {
-                if ($isHomeTeamCurrentHome) {
-                    $homeWins++;
-                } else {
-                    $awayWins++;
-                }
-            } elseif ($homeScore < $awayScore) {
-                if ($isHomeTeamCurrentHome) {
-                    $awayWins++;
-                } else {
-                    $homeWins++;
-                }
-            } else {
-                $draws++;
-            }
+$homeWins = 0;
+$awayWins = 0;
+$draws = 0;
+$homeGoals = 0;
+$awayGoals = 0;
+$lastMeetings = [];
 
-            if ($isHomeTeamCurrentHome) {
-                $homeGoals += $homeScore;
-                $awayGoals += $awayScore;
-            } else {
-                $homeGoals += $awayScore;
-                $awayGoals += $homeScore;
-            }
+foreach ($historicalMatches as $historical) {
+$isCurrentHomeAsHome = $historical->home_team_id === $homeTeamId;
 
-            $lastMeetings[] = [
-                'date' => $historical->match_date,
-                'result' => $this->determineResult($historical, $match->home_team_code),
-                'score' => $historical->result,
-                'venue' => $isHomeTeamCurrentHome ? 'home' : 'away',
-                'home_team' => $historical->home_team,
-                'away_team' => $historical->away_team,
-            ];
-        }
+$homeScore = (int) $historical->home_score;
+$awayScore = (int) $historical->away_score;
 
-        $total = $homeWins + $awayWins + $draws;
+$resultString = "{$homeScore}-{$awayScore}";
 
-        // Create or update H2H record
-        Head_To_Head::updateOrCreate(
-            ['match_id' => $match->id],
-            [
-                'form' => "{$homeWins}-{$draws}-{$awayWins}",
-                'home_wins' => $homeWins,
-                'away_wins' => $awayWins,
-                'draws' => $draws,
-                'total_meetings' => $total,
-                'home_goals' => $homeGoals,
-                'away_goals' => $awayGoals,
-                'last_meetings' => $lastMeetings,
-                'last_meeting_date' => count($lastMeetings) > 0 ? $lastMeetings[0]['date'] : null,
-                'last_meeting_result' => count($lastMeetings) > 0 ? $lastMeetings[0]['result'] : null,
-                'stats' => [
-                    'home_win_percentage' => $total > 0 ? round(($homeWins / $total) * 100, 2) : 0,
-                    'away_win_percentage' => $total > 0 ? round(($awayWins / $total) * 100, 2) : 0,
-                    'draw_percentage' => $total > 0 ? round(($draws / $total) * 100, 2) : 0,
-                    'avg_home_goals' => $total > 0 ? round($homeGoals / $total, 2) : 0,
-                    'avg_away_goals' => $total > 0 ? round($awayGoals / $total, 2) : 0,
-                ],
-            ]
-        );
-
-        Log::info('Head-to-head analysis completed', [
-            'match_id' => $match->id,
-            'total_meetings' => $total,
-            'home_wins' => $homeWins,
-            'away_wins' => $awayWins,
-            'draws' => $draws,
-        ]);
+if ($homeScore > $awayScore) {
+$isCurrentHomeAsHome ? $homeWins++ : $awayWins++;
+} elseif ($homeScore < $awayScore) { $isCurrentHomeAsHome ? $awayWins++ : $homeWins++; } else { $draws++; } if
+    ($isCurrentHomeAsHome) { $homeGoals +=$homeScore; $awayGoals +=$awayScore; } else { $homeGoals +=$awayScore;
+    $awayGoals +=$homeScore; } $lastMeetings[]=[ 'date'=> $historical->match_date->toDateString(),
+    'result' => $this->determineResultFromScores($homeScore, $awayScore, $isCurrentHomeAsHome),
+    'score' => $resultString,
+    'venue' => $isCurrentHomeAsHome ? 'home' : 'away',
+    'home_team' => $historical->home_team,
+    'away_team' => $historical->away_team,
+    ];
     }
 
-    /**
-     * Determine result relative to current home team
-     */
-    protected function determineResult($match, $currentHomeTeamCode)
-    {
-        $scores = explode('-', $match->result);
-        $homeScore = (int)trim($scores[0]);
-        $awayScore = (int)trim($scores[1]);
+    $total = $homeWins + $awayWins + $draws;
 
-        if ($match->home_team_code === $currentHomeTeamCode) {
-            if ($homeScore > $awayScore)
-                return 'home';
-            if ($homeScore < $awayScore)
-                return 'away';
-            return 'draw';
-        } else {
-            if ($awayScore > $homeScore)
-                return 'home';
-            if ($awayScore < $homeScore)
-                return 'away';
-            return 'draw';
-        }
+    Head_To_Head::updateOrCreate(
+    ['match_id' => $match->id],
+    [
+    'form' => "{$homeWins}-{$draws}-{$awayWins}",
+    'home_wins' => $homeWins,
+    'away_wins' => $awayWins,
+    'draws' => $draws,
+    'total_meetings' => $total,
+    'home_goals' => $homeGoals,
+    'away_goals' => $awayGoals,
+    'last_meetings' => $lastMeetings,
+    'last_meeting_date' => $lastMeetings[0]['date'] ?? null,
+    'last_meeting_result' => $lastMeetings[0]['result'] ?? null,
+    'stats' => [
+    'home_win_percentage' => $total > 0 ? round(($homeWins / $total) * 100, 2) : 0,
+    'away_win_percentage' => $total > 0 ? round(($awayWins / $total) * 100, 2) : 0,
+    'draw_percentage' => $total > 0 ? round(($draws / $total) * 100, 2) : 0,
+    'avg_home_goals' => $total > 0 ? round($homeGoals / $total, 2) : 0,
+    'avg_away_goals' => $total > 0 ? round($awayGoals / $total, 2) : 0,
+    ],
+    ]
+    );
+
+    Log::info('Head-to-head analysis completed', [
+    'match_id' => $match->id,
+    'total_meetings' => $total,
+    ]);
     }
+
+    // Add this helper method to determine result from scores
+    protected function determineResultFromScores(int $homeScore, int $awayScore, bool $isCurrentHomeAsHome): string
+    {
+    if ($isCurrentHomeAsHome) {
+    return $homeScore > $awayScore ? 'home' : ($homeScore < $awayScore ? 'away' : 'draw' ); } else { return $awayScore>
+        $homeScore ? 'home' : ($awayScore < $homeScore ? 'away' : 'draw' ); } }
+
 
     /**
      * Process prediction generation
@@ -428,53 +390,40 @@ class ProcessMatchForML implements ShouldQueue
     {
         Log::info('Generating prediction for match', [
             'match_id' => $match->id,
-            'home_team' => $match->home_team,
-            'away_team' => $match->away_team,
         ]);
 
-        // Generate prediction
-        $result = $predictionService->generatePredictions(
-            [$match->id],
-            $this->options
-        );
+        $result = $predictionService->generatePredictions([$match->id], $this->options);
 
-        if ($result['success']) {
-            Log::info('Prediction generated successfully', [
-                'match_id' => $match->id,
-                'prediction_method' => $result['method'],
-                'confidence' => $result['predictions'][0]['confidence'] ?? 0,
-            ]);
-        } else {
+        if (!$result['success']) {
             throw new \Exception('Failed to generate prediction: ' . ($result['error'] ?? 'Unknown error'));
         }
+
+        Log::info('Prediction generated successfully', [
+            'match_id' => $match->id,
+            'method' => $result['method'] ?? 'unknown',
+        ]);
     }
 
     /**
-     * Process full analysis
+     * Full analysis pipeline
      */
     protected function processFullAnalysis(MatchModel $match, PredictionService $predictionService)
     {
         Log::info('Starting full analysis for match', ['match_id' => $match->id]);
 
-        // Step 1: Form analysis
         $this->processFormAnalysis($match);
-        
-        // Step 2: Head-to-head analysis
         $this->processHeadToHead($match);
-        
-        // Step 3: Generate prediction
         $this->processPrediction($match, $predictionService);
-        
-        // Step 4: Update match status
+
         $match->analysis_status = 'completed';
         $match->analysis_completed_at = Carbon::now();
         $match->save();
 
-        Log::info('Full analysis completed for match', ['match_id' => $match->id]);
+        Log::info('Full analysis completed', ['match_id' => $match->id]);
     }
 
     /**
-     * Handle a job failure.
+     * Handle job failure
      */
     public function failed(\Throwable $exception)
     {
@@ -482,10 +431,8 @@ class ProcessMatchForML implements ShouldQueue
             'match_id' => $this->matchId,
             'process_type' => $this->processType,
             'error' => $exception->getMessage(),
-            'trace' => $exception->getTraceAsString(),
         ]);
 
-        // Update match status to failed
         $match = MatchModel::find($this->matchId);
         if ($match) {
             $match->analysis_status = 'failed';

@@ -1,0 +1,16 @@
+       {/* Team Forms Section */}
+        <Box mb={4}>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AddIcon /> Team Forms
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+          <TeamFormInput
+            homeForm={formData.home_form}
+            awayForm={formData.away_form}
+            onChange={(homeForm, awayForm) => {
+              handleInputChange('home_form', homeForm);
+              handleInputChange('away_form', awayForm);
+            }}
+            disabled={submitting}
+          />
+        </Box>

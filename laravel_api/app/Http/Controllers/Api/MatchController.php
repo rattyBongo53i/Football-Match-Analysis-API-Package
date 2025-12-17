@@ -84,6 +84,10 @@ class MatchController extends Controller
      */
     public function store(StoreMatchRequest $request): JsonResponse
     {
+
+        // return all request data in json 
+       
+
         DB::beginTransaction();
 
         try {
@@ -121,7 +125,7 @@ class MatchController extends Controller
 
             Log::error('Failed to create match', [
                 'error' => $e->getMessage(),
-                'request_data' => $request->except(['home_team_form', 'away_team_form', 'head_to_head_stats']),
+                'request_data' => $request->except(['home_form', 'away_form', 'head_to_head_stats']),
             ]);
 
             return response()->json([
@@ -203,7 +207,7 @@ class MatchController extends Controller
             $match->update($matchData);
 
             // Update team forms if provided
-            if ($request->has('home_team_form') || $request->has('away_team_form')) {
+            if ($request->has('home_form') || $request->has('away_form')) {
                 $this->updateTeamForms($match, $request);
             }
 
@@ -338,19 +342,20 @@ class MatchController extends Controller
     private function prepareMatchData($request, Team $homeTeam, Team $awayTeam): array
     {
         return [
+            'home_team' => $homeTeam->name,
+            'away_team' => $awayTeam->name,
             'home_team_id' => $homeTeam->id,
             'away_team_id' => $awayTeam->id,
             'league' => trim($request->league),
-            'competition' => $request->competition,
+            'competition' => $request->competition ?? trim($request->league),
             'match_date' => $request->match_date,
             'match_time' => $request->match_time,
             'venue' => $request->venue,
-            'weather_conditions' => $request->weather_conditions,
+            'weather_conditions' => $request->weather_conditions ?? null,
             'referee' => $request->referee,
             'importance' => $request->importance,
             'tv_coverage' => $request->tv_coverage,
-            'predicted_attendance' => (int) $request->predicted_attendance,
-            'odds' => $request->odds,
+            'predicted_attendance' => (int) ($request->predicted_attendance ?? 0),
             'for_ml_training' => (bool) ($request->for_ml_training ?? true),
             'prediction_ready' => (bool) ($request->prediction_ready ?? false),
             'analysis_status' => 'pending',
@@ -363,39 +368,39 @@ class MatchController extends Controller
      */
     private function storeTeamForms(MatchModel $match, Team $homeTeam, Team $awayTeam, $request): void
     {
-        if ($request->filled('home_team_form')) {
+        if ($request->filled('home_form')) {
             Team_Form::create([
                 'match_id' => $match->id,
                 'team_id' => $homeTeam->code,
                 'venue' => 'home',
-                'form_string' => $request->home_team_form['form_string'] ?? '',
-                'matches_played' => (int) ($request->home_team_form['matches_played'] ?? 0),
-                'wins' => (int) ($request->home_team_form['wins'] ?? 0),
-                'draws' => (int) ($request->home_team_form['draws'] ?? 0),
-                'losses' => (int) ($request->home_team_form['losses'] ?? 0),
-                'avg_goals_scored' => (float) ($request->home_team_form['avg_goals_scored'] ?? 0),
-                'avg_goals_conceded' => (float) ($request->home_team_form['avg_goals_conceded'] ?? 0),
-                'form_rating' => (float) ($request->home_team_form['form_rating'] ?? 5),
-                'form_momentum' => (float) ($request->home_team_form['form_momentum'] ?? 0),
-                'raw_form' => $request->home_team_form['raw_form'] ?? [],
+                'form_string' => $request->home_form['form_string'] ?? '',
+                'matches_played' => (int) ($request->home_form['matches_played'] ?? 0),
+                'wins' => (int) ($request->home_form['wins'] ?? 0),
+                'draws' => (int) ($request->home_form['draws'] ?? 0),
+                'losses' => (int) ($request->home_form['losses'] ?? 0),
+                'avg_goals_scored' => (float) ($request->home_form['avg_goals_scored'] ?? 0),
+                'avg_goals_conceded' => (float) ($request->home_form['avg_goals_conceded'] ?? 0),
+                'form_rating' => (float) ($request->home_form['form_rating'] ?? 5),
+                'form_momentum' => (float) ($request->home_form['form_momentum'] ?? 0),
+                'raw_form' => $request->home_form['raw_form'] ?? [],
             ]);
         }
 
-        if ($request->filled('away_team_form')) {
+        if ($request->filled('away_form')) {
             Team_Form::create([
                 'match_id' => $match->id,
                 'team_id' => $awayTeam->code,
                 'venue' => 'away',
-                'form_string' => $request->away_team_form['form_string'] ?? '',
-                'matches_played' => (int) ($request->away_team_form['matches_played'] ?? 0),
-                'wins' => (int) ($request->away_team_form['wins'] ?? 0),
-                'draws' => (int) ($request->away_team_form['draws'] ?? 0),
-                'losses' => (int) ($request->away_team_form['losses'] ?? 0),
-                'avg_goals_scored' => (float) ($request->away_team_form['avg_goals_scored'] ?? 0),
-                'avg_goals_conceded' => (float) ($request->away_team_form['avg_goals_conceded'] ?? 0),
-                'form_rating' => (float) ($request->away_team_form['form_rating'] ?? 5),
-                'form_momentum' => (float) ($request->away_team_form['form_momentum'] ?? 0),
-                'raw_form' => $request->away_team_form['raw_form'] ?? [],
+                'form_string' => $request->away_form['form_string'] ?? '',
+                'matches_played' => (int) ($request->away_form['matches_played'] ?? 0),
+                'wins' => (int) ($request->away_form['wins'] ?? 0),
+                'draws' => (int) ($request->away_form['draws'] ?? 0),
+                'losses' => (int) ($request->away_form['losses'] ?? 0),
+                'avg_goals_scored' => (float) ($request->away_form['avg_goals_scored'] ?? 0),
+                'avg_goals_conceded' => (float) ($request->away_form['avg_goals_conceded'] ?? 0),
+                'form_rating' => (float) ($request->away_form['form_rating'] ?? 5),
+                'form_momentum' => (float) ($request->away_form['form_momentum'] ?? 0),
+                'raw_form' => $request->away_form['raw_form'] ?? [],
             ]);
         }
     }
@@ -424,7 +429,7 @@ class MatchController extends Controller
      */
     private function updateTeamForms(MatchModel $match, $request): void
     {
-        if ($request->has('home_team_form')) {
+        if ($request->has('home_form')) {
             Team_Form::updateOrCreate(
                 [
                     'match_id' => $match->id,
@@ -432,21 +437,21 @@ class MatchController extends Controller
                 ],
                 [
                     'team_id' => $match->homeTeam->code,
-                    'form_string' => $request->home_team_form['form_string'] ?? '',
-                    'matches_played' => (int) ($request->home_team_form['matches_played'] ?? 0),
-                    'wins' => (int) ($request->home_team_form['wins'] ?? 0),
-                    'draws' => (int) ($request->home_team_form['draws'] ?? 0),
-                    'losses' => (int) ($request->home_team_form['losses'] ?? 0),
-                    'avg_goals_scored' => (float) ($request->home_team_form['avg_goals_scored'] ?? 0),
-                    'avg_goals_conceded' => (float) ($request->home_team_form['avg_goals_conceded'] ?? 0),
-                    'form_rating' => (float) ($request->home_team_form['form_rating'] ?? 5),
-                    'form_momentum' => (float) ($request->home_team_form['form_momentum'] ?? 0),
-                    'raw_form' => $request->home_team_form['raw_form'] ?? [],
+                    'form_string' => $request->home_form['form_string'] ?? '',
+                    'matches_played' => (int) ($request->home_form['matches_played'] ?? 0),
+                    'wins' => (int) ($request->home_form['wins'] ?? 0),
+                    'draws' => (int) ($request->home_form['draws'] ?? 0),
+                    'losses' => (int) ($request->home_form['losses'] ?? 0),
+                    'avg_goals_scored' => (float) ($request->home_form['avg_goals_scored'] ?? 0),
+                    'avg_goals_conceded' => (float) ($request->home_form['avg_goals_conceded'] ?? 0),
+                    'form_rating' => (float) ($request->home_form['form_rating'] ?? 5),
+                    'form_momentum' => (float) ($request->home_form['form_momentum'] ?? 0),
+                    'raw_form' => $request->home_form['raw_form'] ?? [],
                 ]
             );
         }
 
-        if ($request->has('away_team_form')) {
+        if ($request->has('away_form')) {
             Team_Form::updateOrCreate(
                 [
                     'match_id' => $match->id,
@@ -454,16 +459,16 @@ class MatchController extends Controller
                 ],
                 [
                     'team_id' => $match->awayTeam->code,
-                    'form_string' => $request->away_team_form['form_string'] ?? '',
-                    'matches_played' => (int) ($request->away_team_form['matches_played'] ?? 0),
-                    'wins' => (int) ($request->away_team_form['wins'] ?? 0),
-                    'draws' => (int) ($request->away_team_form['draws'] ?? 0),
-                    'losses' => (int) ($request->away_team_form['losses'] ?? 0),
-                    'avg_goals_scored' => (float) ($request->away_team_form['avg_goals_scored'] ?? 0),
-                    'avg_goals_conceded' => (float) ($request->away_team_form['avg_goals_conceded'] ?? 0),
-                    'form_rating' => (float) ($request->away_team_form['form_rating'] ?? 5),
-                    'form_momentum' => (float) ($request->away_team_form['form_momentum'] ?? 0),
-                    'raw_form' => $request->away_team_form['raw_form'] ?? [],
+                    'form_string' => $request->away_form['form_string'] ?? '',
+                    'matches_played' => (int) ($request->away_form['matches_played'] ?? 0),
+                    'wins' => (int) ($request->away_form['wins'] ?? 0),
+                    'draws' => (int) ($request->away_form['draws'] ?? 0),
+                    'losses' => (int) ($request->away_form['losses'] ?? 0),
+                    'avg_goals_scored' => (float) ($request->away_form['avg_goals_scored'] ?? 0),
+                    'avg_goals_conceded' => (float) ($request->away_form['avg_goals_conceded'] ?? 0),
+                    'form_rating' => (float) ($request->away_form['form_rating'] ?? 5),
+                    'form_momentum' => (float) ($request->away_form['form_momentum'] ?? 0),
+                    'raw_form' => $request->away_form['raw_form'] ?? [],
                 ]
             );
         }

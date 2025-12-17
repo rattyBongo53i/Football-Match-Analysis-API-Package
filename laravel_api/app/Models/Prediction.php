@@ -29,7 +29,7 @@ class Prediction extends Model
 
     public function model()
     {
-        return $this->belongsTo(MLModels::class, 'model_id');
+        return $this->belongsTo(MLModel::class, 'model_id');
     }
 
     public function market()

@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class MatchModel extends Model
 {
-    //
     use HasFactory;
 
     protected $table = 'matches';
@@ -22,10 +21,7 @@ class MatchModel extends Model
         'home_score',
         'away_score',
 
-        /****
-         * update columns
-         * 
-         */
+        // Updated columns
         'home_form',
         'away_form',
         'head_to_head',
@@ -33,43 +29,43 @@ class MatchModel extends Model
         'home_team_id',
         'away_team_id',
         'competition',
-        'match_date',
         'venue',
         'odds',
-        'weather',
+        'weather_conditions', // renamed from weather
         'referee',
         'importance',
         'tv_coverage',
         'predicted_attendance',
         'for_ml_training',
         'prediction_ready',
-        // ML columns
+
+        // ML analysis columns (if you have them)
         'analysis_home_win_probability',
         'analysis_draw_probability',
         'analysis_away_win_probability',
         'analysis_confidence',
-        'analysis_prediction'
-    ];
+        'analysis_prediction',
 
-    // =======================
-    //      typecast
-    // =======================
+        // Status & timestamps
+        'analysis_status',
+    ];
 
     protected $casts = [
         'match_date' => 'datetime',
         'odds' => 'array',
-        'for_ml_training' => 'boolean',
-        'prediction_ready' => 'boolean',
         'home_form' => 'array',
         'away_form' => 'array',
         'head_to_head' => 'array',
+        'for_ml_training' => 'boolean',
+        'prediction_ready' => 'boolean',
+        'predicted_attendance' => 'integer',
     ];
-        
+
     // =======================
     //      Relationships
     // =======================
 
-       public function markets()
+    public function markets()
     {
         return $this->belongsToMany(Market::class)
             ->withPivot('market_data')
@@ -78,37 +74,37 @@ class MatchModel extends Model
 
     public function headToHead()
     {
-        return $this->hasOne(Head_To_Head::class);
+        return $this->hasOne(Head_To_Head::class, 'match_id');
     }
 
     public function teamForms()
     {
-        return $this->hasMany(Team_Form::class);
+        return $this->hasMany(Team_Form::class, 'match_id');
     }
 
     public function matchMarkets()
     {
-        return $this->hasMany(MatchMarket::class);
+        return $this->hasMany(MatchMarket::class, 'match_id');
     }
 
     public function slipMatches()
     {
-        return $this->hasMany(SlipMatch::class);
+        return $this->hasMany(SlipMatch::class, 'match_id');
     }
 
     public function predictions()
     {
-        return $this->hasMany(Prediction::class);
+        return $this->hasMany(Prediction::class, 'match_id');
     }
 
     public function historicalResults()
     {
-        return $this->hasMany(HistoricalResults::class);
+        return $this->hasMany(HistoricalResults::class, 'match_id');
     }
 
-    /*****
-     * addictional relationships
-     */
+    // =======================
+    //      Team Relationships
+    // =======================
 
     public function homeTeam()
     {
@@ -119,5 +115,4 @@ class MatchModel extends Model
     {
         return $this->belongsTo(Team::class, 'away_team_id');
     }
-
 }

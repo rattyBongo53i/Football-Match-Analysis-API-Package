@@ -28,12 +28,15 @@ Route::get('/test', function (Request $request) {
     return response()->json(['message' => 'API is working'], 200);
 });
 
-// Polygot
+// Polygot   return response()->json($request->all());
 
 // match
 Route::prefix('matches')->group(function () {
     Route::get('/', [MatchController::class, 'index']);
     Route::post('/', [MatchController::class, 'store']);
+    // Route::post('/', function () { 
+    //     return response()->json(request()->all());
+    // });
     Route::get('/{id}', [MatchController::class, 'show']);
     Route::put('/{id}', [MatchController::class, 'update']);
     Route::delete('/{id}', [MatchController::class, 'destroy']);
