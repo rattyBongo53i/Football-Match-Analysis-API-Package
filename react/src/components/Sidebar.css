@@ -1,0 +1,10 @@
+/* full height */
+.Sidebar{
+    height: 100vh;
+    box-sizing: border-box;
+    border: 2px solid white;
+    border-radius: 8px;
+    padding: 16px;
+    background-color: #f9f9f9;
+
+}

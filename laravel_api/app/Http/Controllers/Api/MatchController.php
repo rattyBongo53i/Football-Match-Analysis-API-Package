@@ -169,13 +169,28 @@ class MatchController extends Controller
     public function show(string $id): JsonResponse
     {
         try {
-            $match = MatchModel::with([
-                'homeTeam',
-                'awayTeam',
-                'headToHead',
-                'teamForms',
-                'predictions'
-            ])->findOrFail($id);
+
+        $match = MatchModel::query()
+                ->select([
+                    'id',
+                    'home_team',           // ← string name (denormalized)
+                    'away_team',           // ← string name (denormalized)
+                    'league',
+                    'match_date',
+                    'status',
+                    'home_score',
+                    'away_score',
+                    'analysis_status',
+                    'prediction_ready',
+                    'created_at',
+                    'updated_at'
+                ])
+                ->with([
+                    'headToHead',     // optional: keep if you want H2H summary
+                    'teamForms',      // optional: keep if you want form count/stats
+                ])->findOrFail($id);
+                // ->withCount('markets as markets_count') // ← shows number of markets
+    
 
             return response()->json([
                 'success' => true,

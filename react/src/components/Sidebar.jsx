@@ -63,6 +63,8 @@ export default function Sidebar() {
   };
 
   return (
+    <>
+    <div className="Sidebar">
     <Paper
       elevation={3}
       sx={{
@@ -156,5 +158,8 @@ export default function Sidebar() {
         </Typography>
       </Box>
     </Paper>
+    </div>
+    </>
+
   );
 }
