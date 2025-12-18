@@ -19,6 +19,7 @@ import {
   ArrowBack as BackIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  AutoAwesome as AutoAwesomeIcon,
   Home as HomeIcon,
   List as ListIcon
 } from '@mui/icons-material';
@@ -173,6 +174,15 @@ const MatchDetails = () => {
             <Grid item>
               <Box display="flex" gap={1} flexWrap="wrap">
                 <AddToBetslipButton match={match} />
+
+                <Button
+                  startIcon={<AutoAwesomeIcon />}
+                  variant="contained"
+                  color="secondary"
+                  onClick={() => navigate(`/matches/${id}/results`)}
+                >
+                  Results
+                </Button>
                 
                 <Button
                   startIcon={<EditIcon />}

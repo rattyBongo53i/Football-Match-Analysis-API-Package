@@ -1,0 +1,16 @@
+# game_engine/requirements.txt
+
+# Web Framework and Server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Data Validation (Core of the schema layer)
+pydantic>=2.6.0
+
+# Mathematical and Numerical Operations
+# Used for probability distributions and simulation calculations
+numpy>=1.26.0
+
+# Optional: Testing and Development
+# httpx>=0.26.0
+# pytest>=8.0.0

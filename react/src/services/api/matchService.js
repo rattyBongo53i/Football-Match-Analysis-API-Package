@@ -88,4 +88,48 @@ export const matchService = {
       throw error;
     }
   },
+
+  /**
+   * Trigger backend prediction generation for a match.
+   * Calls: POST /api/matches/{id}/generate-predictions (Laravel)
+   *
+   * Expected responses (today):
+   *  - { success: true, message, match_id, status: "processing" }
+   *  - 409 if already running/completed
+   */
+  async generatePredictions(matchId) {
+    try {
+      const response = await api.post(`/matches/${matchId}/generate-predictions`);
+      return response.data;
+    } catch (error) {
+      console.error("Error generating predictions:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Fetch prediction results for a match.
+   * V1 target: GET /api/predictions/{match_id}
+   *
+   * This currently tries a couple of shapes/locations so the UI can be built
+   * before the backend results endpoint is finalized.
+   */
+  async getPredictionResults(matchId) {
+    // 1) Future canonical endpoint
+    try {
+      const res = await api.get(`/predictions/${matchId}`);
+      return res.data;
+    } catch (_) {
+      // ignore, fall through
+    }
+
+    // 2) Fallback: match details might eventually embed predictions/slips
+    try {
+      const res = await api.get(`/matches/${matchId}`);
+      return res.data;
+    } catch (error) {
+      console.error("Error fetching prediction results:", error);
+      throw error;
+    }
+  },
 };

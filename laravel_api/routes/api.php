@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\SlipController;
 use App\Http\Controllers\Api\GeneratorController;
 use App\Http\Controllers\Api\MarketController;
 use App\Http\Controllers\Api\JobController;
+use App\Http\Controllers\Api\MasterSlipController;
 // use App\Http\Controllers\Api\MatchController as ApiMatchController;
 
 // use App\Http\Controllers\HealthController; // Or inline if simple 
@@ -118,6 +119,7 @@ Route::group(['prefix' => 'head-to-head'], function () {
 });
 
 // Slips (RESTful + customs)
+Route::post('/master-slips', [MasterSlipController::class, 'store']);
 Route::apiResource('slips', SlipController::class);
 Route::post('slips/master', [SlipController::class, 'createMaster']);
 Route::post('slips/{slipId}/matches', [SlipController::class, 'addMatch']);

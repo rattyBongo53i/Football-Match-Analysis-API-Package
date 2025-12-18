@@ -4,6 +4,7 @@ import MatchEntry from "./pages/MatchEntry/index";
 import SlipMaster from "./pages/SlipMaster";
 import MatchesList from "./pages/MatchesList";
 import MatchDetails from  "./pages/MatchDetails";
+import MatchResults from "./pages/MatchResults";
 
 const router = createBrowserRouter([
   {
@@ -14,6 +15,7 @@ const router = createBrowserRouter([
       { path: "slips/master", element: <SlipMaster /> },
       { path: "matches", element: <MatchesList /> },
       { path: "matches/:id", element: <MatchDetails /> },
+      { path: "matches/:id/results", element: <MatchResults /> },
     //   { path: "slips", element: <SlipList /> },
       
     ],

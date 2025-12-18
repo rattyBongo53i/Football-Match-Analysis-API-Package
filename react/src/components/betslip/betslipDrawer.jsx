@@ -1,6 +1,9 @@
 // In your BetslipDrawer component, add better feedback:
 import { useState } from "react";
-import { Snackbar, Alert } from "@mui/material";
+import { Drawer, Snackbar, Alert } from "@mui/material";
+import { useBetslip } from "../../contexts/BetslipContext";
+import SubmitMasterSlipButton from "./SubmitMasterSlipButton";
+
 
 const BetslipDrawer = ({ open, onClose }) => {
   const { betslipMatches, removeFromBetslip, clearBetslip } = useBetslip();
@@ -15,6 +18,10 @@ const BetslipDrawer = ({ open, onClose }) => {
     <>
       <Drawer anchor="right" open={open} onClose={onClose}>
         {/* ... existing drawer content ... */}
+        <SubmitMasterSlipButton
+          betslipMatches={betslipMatches}
+          onSuccess={() => console.log("Submitted!")}
+        />
       </Drawer>
 
       <Snackbar
