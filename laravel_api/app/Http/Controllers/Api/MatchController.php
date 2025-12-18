@@ -8,6 +8,9 @@ use App\Http\Requests\UpdateMatchRequest;
 use App\Models\MatchModel;
 use App\Models\Team;
 use App\Models\Team_Form;
+use App\Models\Market;
+use App\Models\MatchMarket;
+use App\Models\MatchMarketOutcome;
 use App\Models\Head_To_Head;
 use App\Services\TeamService;
 use App\Jobs\ProcessMatchForML;
@@ -31,7 +34,26 @@ class MatchController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = MatchModel::with(['homeTeam', 'awayTeam', 'headToHead', 'teamForms']);
+            $query = MatchModel::query()
+                ->select([
+                    'id',
+                    'home_team',           // ← string name (denormalized)
+                    'away_team',           // ← string name (denormalized)
+                    'league',
+                    'match_date',
+                    'status',
+                    'home_score',
+                    'away_score',
+                    'analysis_status',
+                    'prediction_ready',
+                    'created_at',
+                    'updated_at'
+                ])
+                // ->with([
+                //     'headToHead',     // optional: keep if you want H2H summary
+                //     'teamForms',      // optional: keep if you want form count/stats
+                // ])
+                ->withCount('markets as markets_count'); // ← shows number of markets
 
             // Apply filters
             if ($request->has('league')) {
@@ -110,9 +132,14 @@ class MatchController extends Controller
             DB::commit();
 
             // Dispatch ML processing job
-            ProcessMatchForML::dispatch($match->id);
+            // ProcessMatchForML::dispatch($match->id);
 
             Log::info('Match created successfully', ['match_id' => $match->id]);
+
+            //store markets for this match
+            if ($request->has('markets')) {
+                $this->storeMarkets($match->id, $request->markets);
+            }
 
             return response()->json([
                 'success' => true,
@@ -339,6 +366,7 @@ class MatchController extends Controller
     /**
      * Prepare match data from request.
      */
+
     private function prepareMatchData($request, Team $homeTeam, Team $awayTeam): array
     {
         return [
@@ -405,6 +433,163 @@ class MatchController extends Controller
         }
     }
 
+    /**
+     * Store markets for a match
+     *
+     * @param int $matchId
+     * @param array $markets
+     * @return void
+     * @throws \Exception
+     */
+    private function storeMarkets(int $matchId, array $markets): void
+    {
+        DB::beginTransaction();
+
+        try {
+            foreach ($markets as $marketData) {
+
+                // 1. Create or fetch the base market definition
+                $market = Market::firstOrCreate(
+                    [
+                        'name' => $marketData['name'],
+                        'market_type' => $marketData['market_type'],
+                    ],
+                    [
+                        'code' => $this->generateMarketCode($marketData['name']),
+                        'description' => ucfirst(str_replace('_', ' ', $marketData['name'])),
+                        'is_active' => true,
+                        'sort_order' => $this->getNextSortOrder(),
+                    ]
+                );
+
+                // 2. Attach market to match (match-specific)
+                $matchMarket = MatchMarket::updateOrCreate(
+                    [
+                        'match_id' => $matchId,
+                        'market_id' => $market->id,
+                    ],
+                    [
+                        'odds' => $marketData['odds'] ?? 0,
+                        'market_data' => json_encode([  // ← ADD json_encode here
+                            'source' => 'manual',
+                            'raw_name' => $marketData['name'],
+                        ]),
+                        'is_active' => true,
+                    ]
+                );
+
+                // 3. Store outcomes PER MATCH MARKET
+                if (!empty($marketData['outcomes']) && is_array($marketData['outcomes'])) {
+                    $this->storeMarketOutcomes(
+                        $matchMarket->id,
+                        $marketData['outcomes']
+                    );
+                }
+            }
+
+            DB::commit();
+
+            Log::info('Markets stored for match', [
+                'match_id' => $matchId,
+                'markets_count' => count($markets),
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('Failed to store markets', [
+                'match_id' => $matchId,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+    }
+    
+    /**
+     * Generate a market code from market name
+     * 
+     * @param string $marketName
+     * @return string
+     */
+    private function generateMarketCode(string $marketName): string
+    {
+        // Convert to uppercase, replace spaces with underscores, remove special chars
+        $code = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '_', $marketName));
+        
+        // If code is too long, truncate it
+        if (strlen($code) > 50) {
+            $code = substr($code, 0, 50);
+        }
+        
+        return $code;
+    }
+    
+    /**
+     * Get the next sort order for markets
+     * 
+     * @return int
+     */
+    private function getNextSortOrder(): int
+    {
+        $lastMarket = Market::orderBy('sort_order', 'desc')->first();
+        return $lastMarket ? $lastMarket->sort_order + 1 : 1;
+    }
+
+    /**
+     * Store outcomes for a match market
+     *
+     * @param int $matchMarketId
+     * @param array $outcomes
+     * @return void
+     */
+private function storeMarketOutcomes(int $matchMarketId, array $outcomes): void
+{
+    foreach ($outcomes as $index => $outcomeData) {
+
+        MatchMarketOutcome::updateOrCreate(
+            [
+                'match_market_id' => $matchMarketId,
+                'outcome_key' => $outcomeData['outcome'],
+            ],
+            [
+                'label' => $this->generateOutcomeLabel($outcomeData['outcome']),
+                'odds' => $outcomeData['odds'] ?? 0,
+                'sort_order' => $index + 1,
+                'is_default' => $index === 0,
+            ]
+        );
+    }
+}
+
+
+    /**
+     * Generate a human-readable outcome label
+     * 
+     * @param string $outcomeName
+     * @return string
+     */
+    private function generateOutcomeLabel(string $outcomeName): string
+    {
+        $labels = [
+            'win' => 'Win',
+            'lose' => 'Lose',
+            'draw' => 'Draw',
+            'over' => 'Over',
+            'under' => 'Under',
+            'yes' => 'Yes',
+            'no' => 'No',
+            'home' => 'Home Win',
+            'away' => 'Away Win',
+            'both_teams_score' => 'Both Teams Score'
+        ];
+        
+        return $labels[$outcomeName] ?? ucfirst(str_replace('_', ' ', $outcomeName));
+    }
+    
+
+
+  
     /**
      * Store head-to-head data from request.
      */
@@ -509,5 +694,58 @@ class MatchController extends Controller
         }
 
         return false;
+    }
+
+
+    /**
+     * Manually trigger ML processing for a match (user-controlled)
+     */
+    public function generatePredictions(string $id): JsonResponse
+    {
+        try {
+            $match = MatchModel::findOrFail($id);
+
+            // Optional: prevent duplicate running
+            if (in_array($match->analysis_status, ['processing', 'completed'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Analysis already running or completed for this match',
+                    'status' => $match->analysis_status,
+                ], 409);
+            }
+
+            // Update status to show it's processing
+            $match->analysis_status = 'processing';
+            $match->save();
+
+            // Dispatch the heavy job in background
+            ProcessMatchForML::dispatch($match->id, 'full')->onQueue('ml-processing');
+
+            Log::info('User triggered ML processing', ['match_id' => $id, 'user_id' => 1]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Analysis started! You will be notified when predictions and slips are ready.',
+                'match_id' => $match->id,
+                'status' => 'processing',
+            ]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Match not found',
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('Failed to trigger ML processing', [
+                'match_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to start analysis',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
     }
 }

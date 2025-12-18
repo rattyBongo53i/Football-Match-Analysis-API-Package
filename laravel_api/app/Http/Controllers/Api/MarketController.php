@@ -6,6 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Market;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use App\Models\MatchMarket;
+use App\Models\MarketOutcomes;
+use App\Models\MarketModel;
+use App\Models\MatchModel;
+use Symfony\Component\HttpFoundation\Request;
 
 class MarketController extends Controller
 {
@@ -151,5 +156,110 @@ class MarketController extends Controller
         ];
         
         return $structures[$marketName] ?? [];
+    }
+
+        /**
+     * Example of how to use the storeMarkets function in your store method
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function store(Request $request)
+    {
+        try {
+            // Validate the main match data
+            $validatedData = $request->validate([
+                'home_team' => 'required|string',
+                'away_team' => 'required|string',
+                'league' => 'required|string',
+                'match_date' => 'required|date',
+                'match_time' => 'nullable|string',
+                'venue' => 'nullable|string',
+                // Add other validation rules...
+            ]);
+            
+            // Create the match
+            $match = MatchModel::create([
+                'home_team' => $validatedData['home_team'],
+                'away_team' => $validatedData['away_team'],
+                'league' => $validatedData['league'],
+                'match_date' => $validatedData['match_date'],
+                'venue' => $request->input('venue', 'Home'),
+                'status' => $request->input('status', 'scheduled'),
+                'home_score' => $request->input('home_score'),
+                'away_score' => $request->input('away_score'),
+                'home_form' => $request->input('home_form'),
+                'away_form' => $request->input('away_form'),
+                'head_to_head' => $request->input('head_to_head'),
+                // Add other fields...
+            ]);
+            
+            // Store markets if they exist in the request
+            if ($request->has('markets') && is_array($request->markets)) {
+                $this->storeMarkets($match->id, $request->markets);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Match and markets created successfully',
+                'data' => [
+                    'match' => $match,
+                    'markets' => $match->markets()->get()
+                ]
+            ], 201);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create match and markets',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * Alternative: Separate endpoint for adding markets to existing match
+     * 
+     * @param Request $request
+     * @param int $matchId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function addMarkets(Request $request, int $matchId)
+    {
+        try {
+            $match = MatchModel::findOrFail($matchId);
+            
+            $validatedData = $request->validate([
+                'markets' => 'required|array',
+                'markets.*.name' => 'required|string',
+                'markets.*.market_type' => 'required|string',
+                'markets.*.odds' => 'nullable|numeric',
+                'markets.*.outcomes' => 'nullable|array'
+            ]);
+            
+            $this->storeMarkets($match->id, $validatedData['markets']);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Markets added successfully',
+                'data' => $match->markets()->get()
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to add markets',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+    public function updateMarkets(Request $request, $id)
+    {
+        $match = MatchModel::findOrFail($id);
+        $this->storeMarkets($match->id, $request->markets);
+
+        return response()->json(['message' => 'Markets updated successfully']);
     }
 }

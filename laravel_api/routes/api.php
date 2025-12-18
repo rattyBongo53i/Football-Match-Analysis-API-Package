@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\SlipController;
 use App\Http\Controllers\Api\GeneratorController;
 use App\Http\Controllers\Api\MarketController;
 use App\Http\Controllers\Api\JobController;
+// use App\Http\Controllers\Api\MatchController as ApiMatchController;
+
 // use App\Http\Controllers\HealthController; // Or inline if simple 
 
 
@@ -46,6 +48,9 @@ Route::prefix('matches')->group(function () {
     // tdb
     Route::get('/{id}/stats', [MatchController::class, 'stats']);
     });
+
+Route::post('/matches/{id}/generate-predictions', [MatchController::class, 'generatePredictions'])
+    ->name('matches.generate-predictions');
 
 // team
 Route::prefix('teams')->group(function () {

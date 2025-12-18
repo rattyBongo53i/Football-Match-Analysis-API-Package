@@ -12,7 +12,7 @@ class MatchMarket extends Model
 
     protected $table = 'match_markets';
     protected $fillable = [
-        'match_id', 'market_id', 'odds', 'additional_data', 'is_active'
+        'match_id', 'market_id', 'odds', 'market_data', 'is_active'
     ];
 
     protected $casts = [

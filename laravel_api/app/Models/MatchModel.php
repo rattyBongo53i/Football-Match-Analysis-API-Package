@@ -30,7 +30,6 @@ class MatchModel extends Model
         'away_team_id',
         'competition',
         'venue',
-        'odds',
         'weather_conditions', // renamed from weather
         'referee',
         'importance',
@@ -67,8 +66,13 @@ class MatchModel extends Model
 
     public function markets()
     {
-        return $this->belongsToMany(Market::class)
-            ->withPivot('market_data')
+        return $this->belongsToMany(
+            Market::class,
+            'match_markets',     // ← your actual pivot table name
+            'match_id',          // ← foreign key for MatchModel
+            'market_id'          // ← foreign key for Market
+        )
+            ->withPivot('odds', 'market_data', 'is_active') // ← any extra columns
             ->withTimestamps();
     }
 
