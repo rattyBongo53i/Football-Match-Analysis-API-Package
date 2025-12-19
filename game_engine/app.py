@@ -4,35 +4,50 @@ import uvicorn
 import time
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+import logging
+import os
 
 # Modular imports using the package structure we established
 from .schemas import MasterSlipRequest, EngineResponse
 from .engine import SlipBuilder
 from .utils import EngineHelpers
 
+
+
+# --- LOGGING SETUP ---
+if not os.path.exists("logs"):
+    os.makedirs("logs")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("logs/engine.log"), # Writes to file
+        logging.StreamHandler()                # Also prints to terminal
+    ]
+)
+logger = logging.getLogger("game_engine")
+
 app = FastAPI(
     title="Football Game Engine",
     description="Quantitative Match Analysis & Portfolio Generation Service",
     version="1.1.0"
 )
-
 # Global instance of the orchestrator to keep the service warm and fast
 builder = SlipBuilder()
 
 @app.middleware("http")
-async def add_performance_metrics(request: Request, call_next):
+
+async def log_requests(request: Request, call_next):
     """
     Middleware to calculate processing time. 
     Laravel reads the 'X-Process-Time' header to monitor engine load.
     """
     start_time = time.time()
     response = await call_next(request)
-    process_time = time.time() - start_time
-    response.headers["X-Process-Time"] = f"{process_time:.4f}"
+    duration = time.time() - start_time
+    logger.info(f"Path: {request.url.path} | Duration: {duration:.4f}s | Status: {response.status_code}")
     return response
-
-@app.post("/generate-slips", response_model=EngineResponse)
-async def generate_slips(payload: MasterSlipRequest):
     """
     Main Entry Point for the Laravel Orchestrator.
     
@@ -40,36 +55,38 @@ async def generate_slips(payload: MasterSlipRequest):
     2. Triggers Poisson Probability & Monte Carlo Simulations.
     3. Returns 100 optimized and ranked slips.
     """
+
+@app.post("/generate-slips", response_model=EngineResponse)
+async def generate_slips(payload: MasterSlipRequest):
     try:
-        # Extract the inner data for logging/tracking
         master_id = payload.master_slip.master_slip_id
-        
-        # Start the generation pipeline
-        # builder.generate handles the 10,000 simulations and coverage logic
+        logger.info(f"Processing Master Slip: {master_id}")
+
+        # Run the core slip generation (Monte Carlo + coverage optimization)
         generated_slips = builder.generate(payload)
-        
-        # Map back to the EngineResponse schema
+
         return {
             "master_slip_id": master_id,
             "generated_slips": generated_slips
         }
 
     except ValueError as ve:
-        # Catch logic/validation errors (e.g., empty matches or zero odds)
+        # Client-side issues (e.g., invalid payload, zero odds, empty matches)
+        logger.warning(f"Validation error for Master Slip {payload.master_slip.master_slip_id}: {str(ve)}")
         raise HTTPException(status_code=400, detail=str(ve))
-    
+
     except Exception as e:
-        # Log critical failures with a timestamp for server-side debugging
+        # Unexpected internal errors
         timestamp = EngineHelpers.get_timestamp()
-        print(f"[{timestamp}] CRITICAL ERROR on Slip {payload.master_slip.master_slip_id}: {str(e)}")
-        
-        # We hide specific tracebacks from the client for security, 
-        # returning a clean 500 error instead.
+        logger.error(
+            f"[{timestamp}] CRITICAL ERROR on Master Slip {payload.master_slip.master_slip_id}: {str(e)}",
+            exc_info=True
+        )
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail="The analytical engine encountered a computational exception."
         )
-
+    
 @app.get("/health")
 async def health_check():
     """Simple endpoint for Docker/Kubernetes or Laravel to check if the engine is alive."""

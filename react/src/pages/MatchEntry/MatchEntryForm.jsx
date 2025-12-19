@@ -1406,11 +1406,17 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                 <Typography
                   variant="h3"
                   fontWeight="800"
-                  sx={{ textShadow: "0 2px 4px rgba(0,0,0,0.2)" }}
+                  sx={{
+                    textShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                    color: "white",
+                  }}
                 >
                   Match Entry Form
                 </Typography>
-                <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ opacity: 0.9, color: "white" }}
+                >
                   Create professional football match data with advanced
                   analytics
                 </Typography>
