@@ -13,11 +13,16 @@ use App\Http\Controllers\Api\GeneratorController;
 use App\Http\Controllers\Api\MarketController;
 use App\Http\Controllers\Api\JobController;
 use App\Http\Controllers\Api\MasterSlipController;
-// use App\Http\Controllers\Api\MatchController as ApiMatchController;
 
-// use App\Http\Controllers\HealthController; // Or inline if simple 
+
+
+
+
 // routes/api.php
 use App\Http\Controllers\Api\PredictionController;
+
+Route::post('/matches/{id}/try-payload', [MatchController::class, 'generateEngineSlips']);
+
 
 Route::post('/matches/{id}/generate-predictions', [MatchController::class, 'generatePredictions']);
 Route::get('/predictions/{match_id}', [PredictionController::class, 'getByMatch']);

@@ -1,3 +1,5 @@
+from typing import List
+
 class CoverageOptimizer:
     """
     Ensures that our 100 slips are not all identical.

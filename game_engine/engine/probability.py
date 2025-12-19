@@ -1,28 +1,31 @@
-import numpy as np
+# game_engine/engine/probability.py
+
+import math
+from typing import Any
 
 class ProbabilityEngine:
-    """
-    Blends Implied Odds with Statistical Form to create 
-    a 'True Probability' distribution for a match.
-    """
     @staticmethod
-    def get_blended_probabilities(match: Any) -> Dict[str, float]:
-        # 1. Start with Implied Probability from Odds (1 / decimal_odds)
-        # We assume the first market is usually 1X2 for baseline
-        primary_market = match.markets[0]
-        implied_prob = 1.0 / primary_market.odds if primary_market.odds > 0 else 0.33
+    def get_blended_probabilities(match: Any) -> float:
+        """
+        Uses xG (Expected Goals) and weights provided by Laravel 
+        to calculate the probability of the 'selected_market' winning.
+        """
+        inputs = match.model_inputs
+        market = match.selected_market
         
-        # 2. Statistical Weighting (simplified for engine logic)
-        # If form is provided, shift the probability slightly
-        form_weight = 0.0
-        if match.team_form:
-            # Logic: More recent wins = higher weight
-            home_pts = match.team_form.get('home_points_last_5', 7.5)
-            away_pts = match.team_form.get('away_points_last_5', 7.5)
-            form_weight = (home_pts - away_pts) / 50.0 # Subtle shift
-            
-        # 3. Blend (60% Market Sentiment / 40% Stats)
-        true_prob = (implied_prob * 0.6) + (form_weight * 0.4)
+        # Simple Poisson-based logic for Home Win vs Away Win based on xG
+        # This uses the weights Laravel calculated
+        raw_prob = (inputs.home_xg / (inputs.home_xg + inputs.away_xg))
         
-        # Ensure bounds [0.05, 0.95] to prevent deterministic simulations
-        return max(0.05, min(0.95, true_prob))
+        # Blend with the Bookmaker's implied probability (Market Sentiment)
+        # Weight: 70% Model Inputs, 30% Market Odds
+        blended_prob = (raw_prob * 0.7) + (market.implied_probability * 0.3)
+        
+        # Adjust for volatility (Higher volatility = push towards 50/50)
+        volatility_factor = inputs.volatility_score / 10.0
+        if blended_prob > 0.5:
+            blended_prob -= (volatility_factor * 0.1)
+        else:
+            blended_prob += (volatility_factor * 0.1)
+
+        return max(0.01, min(0.99, blended_prob))

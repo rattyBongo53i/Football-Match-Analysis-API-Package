@@ -73,27 +73,27 @@ const GradientContainer = styled(Container)(({ theme }) => ({
     #f3e5f5 30%, 
     #f1f8e9 70%, 
     ${theme.palette.background.paper} 100%)`,
-  minHeight: '100vh',
+  minHeight: "100vh",
   padding: theme.spacing(3),
   animation: `${glow} 15s ease infinite`,
-  backgroundSize: '400% 400%',
+  backgroundSize: "400% 400%",
 }));
 
 // Styled Paper with Purple Border
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
-  borderRadius: '24px',
+  borderRadius: "24px",
   border: `2px solid ${theme.palette.primary.light}`,
-  background: 'rgba(255, 255, 255, 0.95)',
-  backdropFilter: 'blur(10px)',
+  background: "rgba(255, 255, 255, 0.95)",
+  backdropFilter: "blur(10px)",
   boxShadow: `0 20px 60px rgba(156, 39, 176, 0.15),
               0 5px 15px rgba(156, 39, 176, 0.05)`,
   animation: `${fadeIn} 0.8s ease-out`,
-  '&:hover': {
+  "&:hover": {
     boxShadow: `0 25px 70px rgba(156, 39, 176, 0.25),
                 0 8px 20px rgba(156, 39, 176, 0.1)`,
-    transform: 'translateY(-2px)',
-    transition: 'all 0.3s ease',
+    transform: "translateY(-2px)",
+    transition: "all 0.3s ease",
   },
 }));
 

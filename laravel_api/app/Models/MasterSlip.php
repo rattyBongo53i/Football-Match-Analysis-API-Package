@@ -27,4 +27,9 @@ class MasterSlip extends Model
     {
         return $this->hasMany(AlternativeSlip::class);
     }
+    
+    public function matches()
+    {
+        return $this->hasMany(MasterSlipMatch::class);
+    }
 }

@@ -9,7 +9,7 @@ import BetslipDrawer from "./components/betslip/BetslipDrawer";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
-
+import './global.css'
 // Separate component for the betslip button that uses the hook
 function BetslipButton({ setBetslipOpen }) {
   const { betslipMatches } = useBetslip(); // ✅ Now inside provider context
