@@ -12,6 +12,8 @@ from .monte_carlo import MonteCarloSimulator
 from .coverage import CoverageOptimizer
 from .slip_builder import SlipBuilder
 from .scoring import ScoringEngine
+from .math_utils import MathUtils
+from .helpers import EngineHelpers
 
 # Explicitly defining the public API for the engine package.
 # This prevents internal logic from leaking into the API or Laravel-facing layers.
@@ -21,4 +23,6 @@ __all__ = [
     "CoverageOptimizer",
     "SlipBuilder",
     "ScoringEngine",
+    "MathUtils",
+    "EngineHelpers",
 ]

@@ -22,4 +22,9 @@ class MasterSlip extends Model
     {
         return $this->hasMany(MasterSlipSelection::class);
     }
+    
+    public function slips()
+    {
+        return $this->hasMany(AlternativeSlip::class);
+    }
 }

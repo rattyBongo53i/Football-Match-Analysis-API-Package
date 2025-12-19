@@ -10,6 +10,8 @@ use App\Models\Team;
 use App\Models\Team_Form;
 use App\Models\Market;
 use App\Models\MatchMarket;
+use App\Models\MasterSlip;
+use App\Models\AlternativeSlip;
 use App\Models\MatchMarketOutcome;
 use App\Models\Head_To_Head;
 use App\Services\TeamService;
@@ -715,7 +717,7 @@ private function storeMarketOutcomes(int $matchMarketId, array $outcomes): void
     /**
      * Manually trigger ML processing for a match (user-controlled)
      */
-    public function generatePredictions(string $id): JsonResponse
+    public function generatePredictionsSingle(string $id): JsonResponse
     {
         try {
             $match = MatchModel::findOrFail($id);
@@ -763,4 +765,86 @@ private function storeMarketOutcomes(int $matchMarketId, array $outcomes): void
             ], 500);
         }
     }
+
+    // app/Http/Controllers/Api/MatchController.php (add method)
+public function generatePredictions(string $id): JsonResponse
+{
+    $match = MatchModel::with(['markets', 'teamForms', 'headToHead'])->find($id);
+
+    if (!$match) {
+        return response()->json(['success' => false, 'message' => 'Match not found'], 404);
+    }
+
+    $masterSlip = MasterSlip::create([
+        'match_id' => $match->id,
+        'stake' => 10.00,
+        'status' => 'completed',
+    ]);
+
+    $markets = $match->markets;
+
+    for ($i = 0; $i < 50; $i++) {
+        $numSelections = rand(2, min(6, $markets->count()));
+        $selectedMarkets = $markets->random($numSelections);
+
+        $totalOdds = 1.0;
+        $selections = [];
+
+        foreach ($selectedMarkets as $market) {
+            $odds = round(rand(120, 450) / 100, 2);
+            $totalOdds *= $odds;
+
+            $selections[] = [
+                'market_id' => $market->id,
+                'odds' => $odds,
+            ];
+        }
+
+        $potentialReturn = round($totalOdds * $masterSlip->stake, 2);
+
+        AlternativeSlip::create([
+            'master_slip_id' => $masterSlip->id,
+            'total_odds' => round($totalOdds, 2),
+            'potential_return' => $potentialReturn,
+            'selections' => $selections,
+        ]);
+    }
+
+    $match->analysis_status = 'completed';
+    $match->save();
+
+    return response()->json([
+        'success' => true,
+        'match_id' => $match->id,
+        'master_slip_id' => $masterSlip->id,
+        'slips_created' => 50,
+        'status' => 'completed',
+    ]);
+}
+
+//Laravel layer can perform several "Orchestrator" tasks:
+    //SLA Monitoring: If $processTime exceeds a threshold (e.g., 2.0 seconds), Laravel can
+    //trigger an alert that the Python engine is struggling or needs more CPU resources
+
+    //Database Logging: You can save this processing time in your Laravel match_analysis_logs table
+    //This helps you track which types of slips (e.g., slips with 20 matches vs 5 matches) take the most computational effort.
+
+ public function generateEngineSlips($masterSlipData)
+        {
+            // 1. Send the POST request to the Python Engine
+            $response = Http::post('http://localhost:5000/generate-slips', $masterSlipData);
+
+            if ($response->successful()) {
+                // 2. Retrieve the custom header we defined in Python
+                $processTime = $response->header('X-Process-Time');
+
+                // 3. Log it or store it for performance monitoring
+                Log::info("Python Engine processed slip ID {$masterSlipData['master_slip_id']} in {$processTime} seconds.");
+
+                // 4. Return the body (the generated slips)
+                return $response->json();
+            }
+
+            throw new \Exception("Engine Error: " . $response->body());
+        }
 }

@@ -119,4 +119,9 @@ class MatchModel extends Model
     {
         return $this->belongsTo(Team::class, 'away_team_id');
     }
+
+    public function masterSlip()
+    {
+        return $this->hasOne(MasterSlip::class, 'match_id');
+    }
 }

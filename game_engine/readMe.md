@@ -247,3 +247,78 @@ Prioritize correctness, clarity, and extensibility.
 
 Repository reference:
 https://github.com/rattyBongo53i/Football-Match-Analysis-API-Package/tree/main
+
+
+
+
+
+# ⚽ Football Game Engine (Python Analysis Service)
+
+A high-performance, stateless analytical engine designed to perform Monte Carlo simulations and coverage optimization for football betting slips.
+
+## 🏗 System Architecture
+
+This service acts as the **computational brain** of the platform.
+* **Laravel (PHP):** Orchestrator, Database Owner, UI Manager.
+* **Python (FastAPI):** Quantitative Analysis, Probability Blending, Monte Carlo Simulations.
+
+**The Boundary:** Laravel sends a "Master Slip" with match data; Python returns 100+ optimized, hedged, and ranked alternative slips.
+
+---
+
+## 📂 Project Structure
+
+```text
+game_engine/
+├── app.py                 # FastAPI Entry point & Middleware
+├── schemas.py             # Pydantic data contracts (Laravel <-> Python)
+├── requirements.txt       # Lean dependency list
+├── engine/                # Core Analytical Logic
+│   ├── probability.py     # Stats + Odds blending
+│   ├── monte_carlo.py     # 10,000 iteration simulations
+│   ├── coverage.py        # Stake distribution & Hedging
+│   ├── scoring.py         # EV, Confidence, and Ranking
+│   └── slip_builder.py    # The Orchestrator class
+└── utils/                 # Foundation Tools
+    ├── math_utils.py      # Odds conversion & Kelly Criterion
+    └── helpers.py         # ID generation & Formatting
+
+
+pip install -r requirements.txt
+
+python -m game_engine.app
+
+
+
+
+
+📡 API Integration (Laravel → Python)Endpoint: POST /generate-slipsInput Payload (Master Slip):Laravel must provide the master_slip_id, the total stake, and an array of matches including market odds.JSON{
+  "master_slip_id": 42,
+  "stake": 100.00,
+  "matches": [
+    {
+      "match_id": 101,
+      "home_team": "Arsenal",
+      "away_team": "Chelsea",
+      "team_form": { "home_pts_last_5": 12, "away_pts_last_5": 4 },
+      "markets": [
+        { "market": "1X2", "selection": "home", "odds": 1.85 }
+      ]
+    }
+  ]
+}
+Output Response:Python returns an array of 100 slips. The first 10-20 are typically "Low Risk" (High Confidence), while the remaining provide coverage/hedging.JSON{
+  "master_slip_id": 42,
+  "generated_slips": [
+    {
+      "slip_id": "SLIP-A1B2C3",
+      "stake": 5.50,
+      "total_odds": 5.43,
+      "possible_return": 29.87,
+      "confidence_score": 0.82,
+      "risk_level": "LOW_RISK",
+      "legs": [...]
+    }
+  ]
+}
+🧠 Quantitative Logic1. Probability BlendingThe engine doesn't rely solely on bookmaker odds. It calculates a True Probability by blending market implied odds ($60\%$) with historical form/H2H data ($40\%$).2. Monte Carlo SimulationsEach match is simulated 10,000 times. This allows the engine to find the "Actual" success rate of a selection vs. what the odds suggest, identifying the Edge (Expected Value).3. Coverage Optimization (The Hedge)Instead of putting the full stake on one outcome, the engine spreads the risk. If the "Master Selection" is a Home Win, the engine generates alternative slips that cover high-probability "Upset" scenarios, ensuring that one unexpected result doesn't zero out the entire master stake.4. Scoring & RankingSlips are ranked using a multi-factor score:Confidence: Derived from simulation success rate.Variance Penalty: Slips with massive discrepancies between odds and stats are penalized to prioritize stability in the "Top" results.⚡ PerformanceThe engine includes a custom middleware. Laravel can inspect the X-Process-Time response header to monitor the computational overhead of the simulations.

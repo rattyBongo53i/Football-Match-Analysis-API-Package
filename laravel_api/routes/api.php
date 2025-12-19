@@ -16,7 +16,11 @@ use App\Http\Controllers\Api\MasterSlipController;
 // use App\Http\Controllers\Api\MatchController as ApiMatchController;
 
 // use App\Http\Controllers\HealthController; // Or inline if simple 
+// routes/api.php
+use App\Http\Controllers\Api\PredictionController;
 
+Route::post('/matches/{id}/generate-predictions', [MatchController::class, 'generatePredictions']);
+Route::get('/predictions/{match_id}', [PredictionController::class, 'getByMatch']);
 
 Route::get('/user', function (Request $request) {
     return $request->user();

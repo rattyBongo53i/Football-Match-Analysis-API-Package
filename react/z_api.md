@@ -257,3 +257,9 @@ GET /api/predictions/{match_id}
  please update and complete my laravel generate prediction function that matches this route "POST api/matches/{id}/generate-predictions", so it can return the computed probalities/slips. use laravel's own tools to create this function and it's implementation
 
  after that the route and controller function for GET /api/predictions/{match_id}
+
+ 
+
+
+
+ https://github.com/rattyBongo53i/Football-Match-Analysis-API-Package/tree/main
