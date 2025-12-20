@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class GeneratedSlipLeg extends Model
 {
     protected $fillable = [
+        'generated_slip_id',
         'match_id',
         'market',
         'selection',
@@ -16,6 +17,6 @@ class GeneratedSlipLeg extends Model
 
     public function generatedSlip(): BelongsTo
     {
-        return $this->belongsTo(GeneratedSlip::class);
+        return $this->belongsTo(GeneratedSlip::class, 'generated_slip_id');
     }
 }

@@ -1,0 +1,238 @@
+/* Global Styles for Gray Theme */
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F5F7;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #BDBDBD;
+  border-radius: 8px;
+  border: 2px solid #F5F5F7;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9E9E9E;
+}
+
+/* Global animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Apply fade-in animation to all components */
+.MuiPaper-root {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Glass effect for cards */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Purple gradient */
+.purple-gradient {
+  background: linear-gradient(135deg, #6A1B9A 0%, #9C27B0 100%) !important;
+  background-size: 200% 200% !important;
+  animation: gradientShift 3s ease infinite !important;
+  color: white !important;
+}
+
+/* Green gradient */
+.green-gradient {
+  background: linear-gradient(135deg, #2E7D32 0%, #43A047 100%) !important;
+  background-size: 200% 200% !important;
+  animation: gradientShift 3s ease infinite !important;
+  color: white !important;
+}
+
+/* Custom card styles */
+.betting-card {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border: 1px solid rgba(106, 27, 154, 0.1) !important;
+  background: linear-gradient(135deg, #FFFFFF 0%, #FAFAFA 100%) !important;
+}
+
+.betting-card:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 12px 40px rgba(106, 27, 154, 0.15) !important;
+  border-color: rgba(106, 27, 154, 0.3) !important;
+}
+
+.betting-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(106, 27, 154, 0.05),
+    transparent
+  );
+  transition: left 0.7s;
+}
+
+.betting-card:hover::before {
+  left: 100%;
+}
+
+/* Status indicators */
+.profit-indicator {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  background: linear-gradient(135deg, #2E7D32, #43A047) !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(46, 125, 50, 0.3) !important;
+}
+
+.loss-indicator {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  background: linear-gradient(135deg, #D32F2F, #EF5350) !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(211, 47, 47, 0.3) !important;
+}
+
+.neutral-indicator {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  background: linear-gradient(135deg, #F57C00, #FFB74D) !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(245, 124, 0, 0.3) !important;
+}
+
+/* Form styling enhancements */
+.MuiTextField-root .MuiOutlinedInput-root {
+  background: #FFFFFF !important;
+  transition: all 0.3s ease !important;
+}
+
+.MuiTextField-root .MuiOutlinedInput-root:hover {
+  background: #FAFAFA !important;
+}
+
+.MuiTextField-root .MuiOutlinedInput-root.Mui-focused {
+  background: #FFFFFF !important;
+  box-shadow: 0 0 0 3px rgba(106, 27, 154, 0.1) !important;
+}
+
+/* Table styling */
+.MuiTableRow-root {
+  transition: background-color 0.2s ease !important;
+}
+
+.MuiTableRow-root:hover {
+  background-color: rgba(106, 27, 154, 0.02) !important;
+}
+
+/* Custom chip styles */
+.custom-chip {
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+.custom-chip:hover {
+  transform: scale(1.05) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Loading animation */
+.loading-spinner {
+  display: inline-block;
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(106, 27, 154, 0.1);
+  border-radius: 50%;
+  border-top-color: #6A1B9A;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Typography enhancements */
+.text-gradient {
+  background: linear-gradient(135deg, #6A1B9A, #2E7D32) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+/* Glow effect */
+.glow-effect {
+  box-shadow: 0 0 20px rgba(106, 27, 154, 0.3) !important;
+}
+
+/* Dashboard layout improvements */
+.dashboard-grid {
+  display: grid;
+  gap: 24px;
+}
+

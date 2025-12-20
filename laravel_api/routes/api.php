@@ -152,7 +152,50 @@ Route::get('markets/{marketId}/outcomes', [MarketController::class, 'outcomes'])
 
 
     // Betslip endpoint
-    Route::get('matches/betslip', [SlipController::class, 'getBetslipMatches']);
+// Slip Management Routes
+Route::prefix('slips')->group(function () {
+
+    // Get all master slips (optional endpoint)
+    Route::get('/', [SlipController::class, 'getAllMasterSlips']);
+
+    // Get generated slips for a specific master slip
+    Route::get('/{masterSlipId}/generated-slips', [SlipController::class, 'getGeneratedSlips'])
+        ->where('masterSlipId', '[0-9A-Za-z\-]+'); // Allows UUIDs and numeric IDs
+
+    // Get detailed view of a single generated slip
+    Route::get('/generated/{generatedSlipId}', [SlipController::class, 'getSlipDetail'])
+        ->where('generatedSlipId', '[0-9A-Za-z\-]+');
+
+    // Delete a master slip and all related data
+    Route::delete('/{masterSlipId}', [SlipController::class, 'deleteSlip'])
+        ->where('masterSlipId', '[0-9A-Za-z\-]+');
+
+    // Get slip status (useful for polling)
+    Route::get('/{masterSlipId}/status', [SlipController::class, 'getSlipStatus'])
+        ->where('masterSlipId', '[0-9A-Za-z\-]+');
+
+    // Get slip statistics for dashboards
+    Route::get('/statistics', [SlipController::class, 'getSlipsStatistics']);
+
+    // Export slips to CSV
+    Route::get('/export/csv', [SlipController::class, 'exportSlipsToCSV']);
+
+    // Get recent slips (optional endpoint)
+    Route::get('/recent', [SlipController::class, 'getRecentSlips']);
+});
+
+// Alternative route naming for frontend compatibility
+Route::prefix('master-slips')->group(function () {
+    Route::get('/{masterSlipId}/slips', [SlipController::class, 'getGeneratedSlips']);
+    Route::get('/{masterSlipId}/slips-stats', [SlipController::class, 'getSlipsStatistics']);
+    Route::get('/{masterSlipId}/export-slips', [SlipController::class, 'exportSlipsToCSV']);
+});
+
+// Direct slip routes for convenience
+Route::get('/slip/{generatedSlipId}', [SlipController::class, 'getSlipDetail']);
+
+
+
     
     // Market endpoints
     Route::get('markets', [MarketController::class, 'index']);

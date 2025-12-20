@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class GeneratedSlip extends Model
 {
     protected $fillable = [
+        'master_slip_id',
         'slip_id',
         'stake',
         'total_odds',
@@ -20,15 +21,19 @@ class GeneratedSlip extends Model
 
     protected $casts = [
         'raw_data' => 'array',
+        'stake' => 'decimal:2',
+        'total_odds' => 'decimal:2',
+        'possible_return' => 'decimal:2',
+        'confidence_score' => 'decimal:2',
     ];
 
     public function masterSlip(): BelongsTo
     {
-        return $this->belongsTo(MasterSlip::class);
+        return $this->belongsTo(MasterSlip::class, 'master_slip_id');
     }
 
     public function legs(): HasMany
     {
-        return $this->hasMany(GeneratedSlipLeg::class);
+        return $this->hasMany(GeneratedSlipLeg::class, 'generated_slip_id');
     }
 }

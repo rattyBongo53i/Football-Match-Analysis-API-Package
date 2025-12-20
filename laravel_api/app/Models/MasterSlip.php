@@ -35,6 +35,6 @@ class MasterSlip extends Model
 
     public function generatedSlips()
     {
-        return $this->hasMany(GeneratedSlip::class);
+        return $this->hasMany(GeneratedSlip::class, 'master_slip_id');
     }
 }

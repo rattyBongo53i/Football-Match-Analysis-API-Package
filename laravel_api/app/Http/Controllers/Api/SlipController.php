@@ -3,348 +3,546 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\MatchModel;
+use App\Models\MasterSlip;
+use App\Models\GeneratedSlip;
+use App\Models\GeneratedSlipLeg;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Carbon\Carbon;
 
+/**
+ * Controller for managing slips and generated slips.
+ * Provides API endpoints for frontend slip pages.
+ */
 class SlipController extends Controller
 {
-    private const MIN_MATCHES_REQUIRED = 1;
-    private const MAX_MATCHES_ALLOWED = 50; // Reasonable limit for performance
-
     /**
-     * Get matches for betslip
-     * 
-     * Endpoint: GET /api/matches/betslip?match_ids=1,2,3,4,5
-     * 
-     * @param Request $request
-     * @return JsonResponse
+     * Get all generated slips for a specific master slip.
+     *
+     * This endpoint fetches all generated slips for a given master slip ID,
+     * including their legs (selections) with eager loading for performance.
+     *
+     * @param string $masterSlipId The UUID or ID of the master slip
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function getBetslipMatches(Request $request): JsonResponse
+    public function getGeneratedSlips(string $masterSlipId)
     {
         try {
-            $validationResult = $this->validateRequest($request);
-            if ($validationResult instanceof JsonResponse) {
-                return $validationResult;
-            }
-
-            $matchIds = $validationResult;
-            $validationErrors = $this->validateMatchIds($matchIds);
+            // Find the master slip or return 404
+            $masterSlip = MasterSlip::findOrFail($masterSlipId);
             
-            if ($validationErrors) {
-                return $this->errorResponse($validationErrors['message'], $validationErrors['code'], $validationErrors['data'] ?? []);
-            }
-
-            $matches = $this->fetchMatchesWithRelations($matchIds);
-            $missingMatches = $this->findMissingMatches($matchIds, $matches);
-
-            if (!empty($missingMatches)) {
-                return $this->errorResponse(
-                    'Some matches not found',
-                    404,
-                    ['missing_ids' => $missingMatches]
-                );
-            }
-
-            $transformedMatches = $this->transformMatches($matches);
-
-            return $this->successResponse($transformedMatches);
-
-        } catch (ValidationException $e) {
-            return $this->validationErrorResponse($e);
+            // Load generated slips with their legs
+            $generatedSlips = GeneratedSlip::where('master_slip_id', $masterSlipId)
+                ->with(['legs' => function($query) {
+                    // Order legs for consistent display
+                    $query->orderBy('created_at', 'asc');
+                }])
+                ->orderBy('confidence_score', 'desc') // Show highest confidence first
+                ->get();
             
-        } catch (\Throwable $e) {
-            Log::error('Critical error fetching betslip matches', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'match_ids' => $request->match_ids ?? 'not provided'
-            ]);
-            
-            return $this->serverErrorResponse($e);
-        }
-    }
-
-    /**
-     * Validate the incoming request
-     */
-    private function validateRequest(Request $request): JsonResponse|array
-    {
-        try {
-            $request->validate([
-                'match_ids' => [
-                    'required',
-                    'string',
-                    'regex:/^[0-9]+(,[0-9]+)*$/'
+            return response()->json([
+                'success' => true,
+                'message' => 'Generated slips retrieved successfully',
+                'data' => [
+                    'master_slip_id' => $masterSlipId,
+                    'generated_slips' => $generatedSlips,
+                    'count' => $generatedSlips->count()
                 ]
             ]);
             
-            return $this->parseMatchIds($request->match_ids);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Master slip not found',
+                'error' => 'The requested master slip does not exist.'
+            ], Response::HTTP_NOT_FOUND);
             
-        } catch (ValidationException $e) {
-            throw $e;
         } catch (\Exception $e) {
-            Log::warning('Unexpected error during request validation', [
-                'error' => $e->getMessage(),
-                'match_ids_param' => $request->match_ids
-            ]);
-            
-            return $this->errorResponse('Invalid request format', 400);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve generated slips',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
     /**
-     * Parse and clean match IDs from string
+     * Get detailed information for a specific generated slip.
+     *
+     * This endpoint returns a single generated slip with all its legs
+     * and metadata for frontend detail view.
+     *
+     * @param string $generatedSlipId The UUID or ID of the generated slip
+     * @return \Illuminate\Http\JsonResponse
      */
-    private function parseMatchIds(string $matchIdsString): array
-    {
-        $matchIds = explode(',', $matchIdsString);
-        
-        // Filter out empty strings and non-numeric values
-        $matchIds = array_filter($matchIds, function ($id) {
-            return is_numeric(trim($id)) && trim($id) !== '';
-        });
-        
-        // Convert to integers and ensure uniqueness
-        $matchIds = array_map('intval', $matchIds);
-        $matchIds = array_unique($matchIds);
-        
-        return array_values($matchIds); // Re-index array
-    }
-
-    /**
-     * Validate match IDs business logic
-     */
-    private function validateMatchIds(array $matchIds): ?array
-    {
-        // Check minimum matches
-        if (count($matchIds) < self::MIN_MATCHES_REQUIRED) {
-            return [
-                'message' => 'At least one valid match ID is required',
-                'code' => 400,
-                'data' => [
-                    'min_required' => self::MIN_MATCHES_REQUIRED,
-                    'provided' => count($matchIds)
-                ]
-            ];
-        }
-
-        // Check maximum allowed (for performance)
-        if (count($matchIds) > self::MAX_MATCHES_ALLOWED) {
-            return [
-                'message' => 'Too many match IDs requested',
-                'code' => 400,
-                'data' => [
-                    'max_allowed' => self::MAX_MATCHES_ALLOWED,
-                    'provided' => count($matchIds)
-                ]
-            ];
-        }
-
-        // Check for invalid IDs
-        $invalidIds = array_filter($matchIds, function ($id) {
-            return $id <= 0 || $id > PHP_INT_MAX;
-        });
-
-        if (!empty($invalidIds)) {
-            return [
-                'message' => 'Invalid match IDs detected',
-                'code' => 400,
-                'data' => ['invalid_ids' => array_values($invalidIds)]
-            ];
-        }
-
-        return null;
-    }
-
-    /**
-     * Fetch matches with their relations
-     */
-    private function fetchMatchesWithRelations(array $matchIds)
+    public function getSlipDetail(string $generatedSlipId)
     {
         try {
-            return MatchModel::with([
-                'markets' => function ($query) {
-                    $query->where('is_active', true)
-                          ->orderBy('created_at');
+            // Find the generated slip with all relationships
+            $generatedSlip = GeneratedSlip::with([
+                'legs' => function($query) {
+                    $query->orderBy('created_at', 'asc');
                 },
-                'markets.outcomes' => function ($query) {
-                    $query->orderBy('outcome');
+                'masterSlip' => function($query) {
+                    // Only load necessary master slip data
+                    $query->select(['id', 'stake', 'currency', 'status', 'created_at']);
                 }
-            ])
-            ->whereIn('id', $matchIds)
-            ->orderBy('match_date')
-            ->orderBy('match_time')
-            ->get();
+            ])->findOrFail($generatedSlipId);
             
-        } catch (\Exception $e) {
-            Log::error('Database error fetching matches', [
-                'error' => $e->getMessage(),
-                'match_ids' => $matchIds
+            // Format the response for frontend
+            $formattedSlip = [
+                'slip_id' => $generatedSlip->id,
+                'stake' => (float) $generatedSlip->stake,
+                'total_odds' => (float) $generatedSlip->total_odds,
+                'possible_return' => (float) $generatedSlip->possible_return,
+                'risk_level' => $generatedSlip->risk_level,
+                'confidence_score' => (float) $generatedSlip->confidence_score,
+                'created_at' => $generatedSlip->created_at->toISOString(),
+                'legs' => $generatedSlip->legs->map(function($leg) {
+                    return [
+                        'match_id' => $leg->match_id,
+                        'market' => $leg->market,
+                        'selection' => $leg->selection,
+                        'odds' => (float) $leg->odds,
+                        'created_at' => $leg->created_at->toISOString()
+                    ];
+                }),
+                'master_slip' => $generatedSlip->masterSlip ? [
+                    'stake' => (float) $generatedSlip->masterSlip->stake,
+                    'currency' => $generatedSlip->masterSlip->currency,
+                    'status' => $generatedSlip->masterSlip->status,
+                    'created_at' => $generatedSlip->masterSlip->created_at->toISOString()
+                ] : null
+            ];
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Slip detail retrieved successfully',
+                'data' => $formattedSlip
             ]);
             
-            throw new \RuntimeException('Failed to retrieve match data from database', 0, $e);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Generated slip not found',
+                'error' => 'The requested generated slip does not exist.'
+            ], Response::HTTP_NOT_FOUND);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve slip detail',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
     /**
-     * Find which requested match IDs are missing from results
+     * Delete a master slip and all its related data.
+     *
+     * This endpoint permanently deletes a master slip, all its generated slips,
+     * and all generated slip legs. Uses database transaction to ensure
+     * data integrity and prevent partial deletes.
+     *
+     * @param string $masterSlipId The UUID or ID of the master slip to delete
+     * @return \Illuminate\Http\JsonResponse
      */
-    private function findMissingMatches(array $requestedIds, $matches): array
+    public function deleteSlip(string $masterSlipId)
     {
-        $foundIds = $matches->pluck('id')->toArray();
-        $missingIds = array_diff($requestedIds, $foundIds);
+        DB::beginTransaction();
         
-        return array_values($missingIds);
+        try {
+            // Find the master slip
+            $masterSlip = MasterSlip::findOrFail($masterSlipId);
+            
+            // Get all generated slip IDs for this master slip
+            $generatedSlipIds = GeneratedSlip::where('master_slip_id', $masterSlipId)
+                ->pluck('id')
+                ->toArray();
+            
+            // Delete in correct order to maintain referential integrity
+            if (!empty($generatedSlipIds)) {
+                // First delete all legs for these generated slips
+                GeneratedSlipLeg::whereIn('generated_slip_id', $generatedSlipIds)->delete();
+                
+                // Then delete the generated slips
+                GeneratedSlip::where('master_slip_id', $masterSlipId)->delete();
+            }
+            
+            // Finally delete the master slip
+            $masterSlip->delete();
+            
+            DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Master slip and all related data deleted successfully',
+                'data' => [
+                    'deleted_master_slip_id' => $masterSlipId,
+                    'deleted_generated_slips_count' => count($generatedSlipIds)
+                ]
+            ]);
+            
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Master slip not found',
+                'error' => 'The requested master slip does not exist.'
+            ], Response::HTTP_NOT_FOUND);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete slip',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
-     * Transform matches for frontend
+     * Get statistics about slips for dashboard display.
+     *
+     * This endpoint provides summary data including total slips,
+     * generated slips count, average legs per slip, and other metrics
+     * for frontend dashboards. Uses efficient database queries.
+     *
+     * @param Request $request Optional filters via query parameters
+     * @return \Illuminate\Http\JsonResponse
      */
-    private function transformMatches($matches)
-    {
-        return $matches->map(function ($match) {
-            return $this->transformMatchForFrontend($match);
-        });
-    }
-
-    /**
-     * Transform match data for frontend consumption
-     */
-    private function transformMatchForFrontend(MatchModel $match): array
+    public function getSlipsStatistics(Request $request)
     {
         try {
-            $matchData = [
-                'id' => $match->id,
-                'home_team' => $match->home_team,
-                'away_team' => $match->away_team,
-                'league' => $match->league,
-                'match_date' => $match->match_date instanceof \DateTimeInterface 
-                    ? $match->match_date->toDateString() 
-                    : $match->match_date,
-                'match_time' => $match->match_time,
-                'venue' => $match->venue,
-                'referee' => $match->referee,
-                'weather' => $match->weather,
-                'status' => $match->status,
-                'home_score' => $match->home_score,
-                'away_score' => $match->away_score,
-                'home_form' => $match->home_form ?? [],
-                'away_form' => $match->away_form ?? [],
-                'head_to_head' => $match->head_to_head ?? [],
-                'notes' => $match->notes,
-                'created_at' => $match->created_at instanceof \DateTimeInterface
-                    ? $match->created_at->toISOString()
-                    : $match->created_at,
-                'updated_at' => $match->updated_at instanceof \DateTimeInterface
-                    ? $match->updated_at->toISOString()
-                    : $match->updated_at
+            // Apply optional date filters
+            $query = MasterSlip::query();
+            
+            if ($request->has('start_date')) {
+                $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
+                $query->where('created_at', '>=', $startDate);
+            }
+            
+            if ($request->has('end_date')) {
+                $endDate = Carbon::parse($request->input('end_date'))->endOfDay();
+                $query->where('created_at', '<=', $endDate);
+            }
+            
+            // Get master slips with their generated slips count
+            $masterSlips = $query->withCount('generatedSlips')->get();
+            
+            // Calculate statistics
+            $totalMasterSlips = $masterSlips->count();
+            $totalGeneratedSlips = $masterSlips->sum('generated_slips_count');
+            
+            // Get legs statistics
+            $legsQuery = GeneratedSlipLeg::query();
+            
+            if ($request->has('start_date')) {
+                $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
+                $legsQuery->where('created_at', '>=', $startDate);
+            }
+            
+            if ($request->has('end_date')) {
+                $endDate = Carbon::parse($request->input('end_date'))->endOfDay();
+                $legsQuery->where('created_at', '<=', $endDate);
+            }
+            
+            $totalLegs = $legsQuery->count();
+            $averageLegsPerSlip = $totalGeneratedSlips > 0 ? $totalLegs / $totalGeneratedSlips : 0;
+            
+            // Get generated slips for confidence statistics
+            $generatedSlipsQuery = GeneratedSlip::query();
+            
+            if ($request->has('start_date')) {
+                $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
+                $generatedSlipsQuery->where('created_at', '>=', $startDate);
+            }
+            
+            if ($request->has('end_date')) {
+                $endDate = Carbon::parse($request->input('end_date'))->endOfDay();
+                $generatedSlipsQuery->where('created_at', '<=', $endDate);
+            }
+            
+            $confidenceStats = $generatedSlipsQuery->selectRaw(
+                'AVG(confidence_score) as avg_confidence, 
+                 MIN(confidence_score) as min_confidence, 
+                 MAX(confidence_score) as max_confidence'
+            )->first();
+            
+            // Compile statistics
+            $statistics = [
+                'master_slips' => [
+                    'total' => $totalMasterSlips,
+                    'by_status' => $masterSlips->groupBy('status')->map->count()
+                ],
+                'generated_slips' => [
+                    'total' => $totalGeneratedSlips,
+                    'avg_per_master_slip' => $totalMasterSlips > 0 ? $totalGeneratedSlips / $totalMasterSlips : 0
+                ],
+                'legs' => [
+                    'total' => $totalLegs,
+                    'avg_per_generated_slip' => round($averageLegsPerSlip, 2)
+                ],
+                'confidence' => [
+                    'average' => $confidenceStats->avg_confidence ? round($confidenceStats->avg_confidence, 2) : 0,
+                    'minimum' => $confidenceStats->min_confidence ? round($confidenceStats->min_confidence, 2) : 0,
+                    'maximum' => $confidenceStats->max_confidence ? round($confidenceStats->max_confidence, 2) : 0
+                ],
+                'time_period' => [
+                    'start_date' => $request->input('start_date'),
+                    'end_date' => $request->input('end_date')
+                ]
             ];
-
-            $matchData['markets'] = $match->markets->map(function ($market) {
-                return $this->transformMarketForFrontend($market);
-            });
-
-            return $matchData;
-
-        } catch (\Exception $e) {
-            Log::warning('Error transforming match data', [
-                'match_id' => $match->id,
-                'error' => $e->getMessage()
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Statistics retrieved successfully',
+                'data' => $statistics
             ]);
             
-            // Return minimal data if transformation fails
-            return [
-                'id' => $match->id,
-                'home_team' => $match->home_team,
-                'away_team' => $match->away_team,
-                'league' => $match->league,
-                'error' => 'Failed to load full match details'
-            ];
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve statistics',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
     /**
-     * Transform market data for frontend consumption
+     * Export slips data to CSV format.
+     *
+     * This endpoint streams slips data as CSV for download.
+     * Includes optional filtering by date range and slip ID.
+     * Uses Laravel's StreamedResponse for memory efficiency.
+     *
+     * @param Request $request Optional filters
+     * @return StreamedResponse
      */
-    private function transformMarketForFrontend(\App\Models\Market $market): array
+    public function exportSlipsToCSV(Request $request)
     {
-        $marketData = [
-            'id' => $market->id,
-            'name' => $market->name,
-            'market_type' => $market->market_type,
-            'odds' => (float) $market->odds,
-            'is_active' => (bool) $market->is_active,
-            'created_at' => $market->created_at instanceof \DateTimeInterface
-                ? $market->created_at->toISOString()
-                : $market->created_at,
-            'updated_at' => $market->updated_at instanceof \DateTimeInterface
-                ? $market->updated_at->toISOString()
-                : $market->updated_at
-        ];
-
-        if ($market->relationLoaded('outcomes') && $market->outcomes->isNotEmpty()) {
-            $marketData['outcomes'] = $market->outcomes->map(function ($outcome) {
-                return [
-                    'outcome' => $outcome->outcome,
-                    'odds' => (float) $outcome->odds
-                ];
-            });
+        try {
+            // Build query with optional filters
+            $query = GeneratedSlip::query()
+                ->with(['legs', 'masterSlip'])
+                ->orderBy('created_at', 'desc');
+            
+            // Apply master slip ID filter
+            if ($request->has('master_slip_id')) {
+                $query->where('master_slip_id', $request->input('master_slip_id'));
+            }
+            
+            // Apply date range filter
+            if ($request->has('start_date')) {
+                $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
+                $query->where('created_at', '>=', $startDate);
+            }
+            
+            if ($request->has('end_date')) {
+                $endDate = Carbon::parse($request->input('end_date'))->endOfDay();
+                $query->where('created_at', '<=', $endDate);
+            }
+            
+            // Define CSV headers
+            $headers = [
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => 'attachment; filename="slips_export_' . date('Y-m-d_H-i-s') . '.csv"',
+            ];
+            
+            // Create streamed response for memory efficiency
+            return new StreamedResponse(function () use ($query, $request) {
+                // Open output stream
+                $handle = fopen('php://output', 'w');
+                
+                // Write CSV headers
+                fputcsv($handle, [
+                    'Slip ID',
+                    'Master Slip ID',
+                    'Stake',
+                    'Total Odds',
+                    'Possible Return',
+                    'Risk Level',
+                    'Confidence Score (%)',
+                    'Number of Legs',
+                    'Created At',
+                    'Market',
+                    'Selections',
+                    'Average Odds per Leg'
+                ]);
+                
+                // Stream data in chunks for memory efficiency
+                $query->chunk(100, function ($slips) use ($handle) {
+                    foreach ($slips as $slip) {
+                        // Prepare selections and market info
+                        $selections = $slip->legs->pluck('selection')->toArray();
+                        $markets = $slip->legs->pluck('market')->toArray();
+                        $odds = $slip->legs->pluck('odds')->toArray();
+                        
+                        // Calculate average odds
+                        $avgOdds = count($odds) > 0 ? array_sum($odds) / count($odds) : 0;
+                        
+                        fputcsv($handle, [
+                            $slip->id,
+                            $slip->master_slip_id,
+                            $slip->stake,
+                            $slip->total_odds,
+                            $slip->possible_return,
+                            $slip->risk_level,
+                            $slip->confidence_score,
+                            $slip->legs->count(),
+                            $slip->created_at->toDateTimeString(),
+                            implode('; ', array_unique($markets)),
+                            implode('; ', $selections),
+                            round($avgOdds, 2)
+                        ]);
+                    }
+                });
+                
+                fclose($handle);
+            }, Response::HTTP_OK, $headers);
+            
+        } catch (\Exception $e) {
+            // Fallback JSON response if CSV streaming fails
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to export CSV',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
-
-        return $marketData;
     }
 
     /**
-     * Response helper methods
+     * Get all master slips with basic information.
+     *
+     * Optional endpoint for frontend to list master slips.
+     * Includes generated slips count for quick overview.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
-    
-    private function successResponse($data, string $message = null): JsonResponse
+    public function getAllMasterSlips(Request $request)
     {
-        $response = ['data' => $data];
-        
-        if ($message) {
-            $response['message'] = $message;
+        try {
+            $query = MasterSlip::query()
+                ->withCount('generatedSlips')
+                ->orderBy('created_at', 'desc');
+            
+            // Optional pagination
+            $perPage = $request->input('per_page', 20);
+            $masterSlips = $query->paginate($perPage);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Master slips retrieved successfully',
+                'data' => $masterSlips
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve master slips',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
-        
-        return response()->json($response);
     }
 
-    private function errorResponse(string $message, int $statusCode, array $data = []): JsonResponse
+    /**
+     * Get recent generated slips for quick view.
+     *
+     * Optional endpoint for dashboard or recent activity display.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getRecentSlips(Request $request)
     {
-        $response = ['error' => $message];
-        
-        if (!empty($data)) {
-            $response['details'] = $data;
+        try {
+            $limit = $request->input('limit', 10);
+            
+            $recentSlips = GeneratedSlip::with(['masterSlip', 'legs'])
+                ->orderBy('created_at', 'desc')
+                ->limit($limit)
+                ->get()
+                ->map(function($slip) {
+                    return [
+                        'id' => $slip->id,
+                        'master_slip_id' => $slip->master_slip_id,
+                        'stake' => (float) $slip->stake,
+                        'total_odds' => (float) $slip->total_odds,
+                        'possible_return' => (float) $slip->possible_return,
+                        'risk_level' => $slip->risk_level,
+                        'confidence_score' => (float) $slip->confidence_score,
+                        'legs_count' => $slip->legs->count(),
+                        'created_at' => $slip->created_at->toISOString(),
+                        'master_slip' => $slip->masterSlip ? [
+                            'status' => $slip->masterSlip->status,
+                            'stake' => (float) $slip->masterSlip->stake
+                        ] : null
+                    ];
+                });
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Recent slips retrieved successfully',
+                'data' => $recentSlips
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve recent slips',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
-        
-        return response()->json($response, $statusCode);
     }
 
-    private function validationErrorResponse(ValidationException $e): JsonResponse
+    /**
+     * Get slip status information.
+     *
+     * Optional endpoint to check slip processing status.
+     * Useful for frontend polling to show progress.
+     *
+     * @param string $masterSlipId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getSlipStatus(string $masterSlipId)
     {
-        return response()->json([
-            'error' => 'Invalid request parameters',
-            'errors' => $e->errors(),
-            'message' => $e->getMessage()
-        ], 422);
-    }
-
-    private function serverErrorResponse(\Throwable $e): JsonResponse
-    {
-        $response = ['error' => 'Failed to fetch betslip matches'];
-        
-        // Add detailed error in development
-        if (config('app.debug')) {
-            $response['debug'] = [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
+        try {
+            $masterSlip = MasterSlip::findOrFail($masterSlipId);
+            
+            $generatedSlipsCount = GeneratedSlip::where('master_slip_id', $masterSlipId)->count();
+            
+            $status = [
+                'master_slip_id' => $masterSlipId,
+                'status' => $masterSlip->status,
+                'generated_slips_count' => $generatedSlipsCount,
+                'last_updated' => $masterSlip->updated_at->toISOString(),
+                'is_complete' => $masterSlip->status === 'completed',
+                'is_processing' => $masterSlip->status === 'processing',
+                'has_generated_slips' => $generatedSlipsCount > 0
             ];
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Slip status retrieved successfully',
+                'data' => $status
+            ]);
+            
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Master slip not found',
+                'error' => 'The requested master slip does not exist.'
+            ], Response::HTTP_NOT_FOUND);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve slip status',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
-        
-        return response()->json($response, 500);
     }
 }
