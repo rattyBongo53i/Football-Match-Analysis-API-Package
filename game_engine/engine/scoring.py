@@ -21,57 +21,42 @@ class ScoringEngine:
         edge = (simulated_prob * market_odds) - 1
         return round(edge, 4)
 
-    @staticmethod
-    def calculate_confidence_score(match_sim_results: List[Dict[str, Any]]) -> float:
+    def calculate_confidence_score(self, match_sims: List[Dict[str, Any]]) -> float:
         """
-        Generates a 0.0 to 1.0 score representing the reliability of a slip.
-        It considers:
-        1. Average simulated success rate of all legs.
-        2. Market agreement (low variance between our prob and market prob).
+        Calculates a score from 0-100 based on simulation success 
+        and market value.
         """
-        if not match_sim_results:
-            return 0.0
-
-        total_sim_success = sum(m['sim_success'] for m in match_sim_results)
-        avg_success = total_sim_success / len(match_sim_results)
-
-        # Market validation: If our simulation is wildly different from the odds, 
-        # it might be a 'Value' bet, but confidence is actually lower due to high variance.
-        # We penalize extreme outliers to keep 'High Confidence' slips stable.
-        variance_penalty = 0.0
-        for m in match_sim_results:
-            market_implied = 1 / m['match'].markets[0].odds
-            variance_penalty += abs(m['sim_success'] - market_implied)
+        total_score = 0
         
-        normalized_penalty = (variance_penalty / len(match_sim_results)) * 0.2
-        
-        confidence = avg_success - normalized_penalty
-        return max(0.0, min(1.0, round(confidence, 4)))
+        for m in match_sims:
+            # sim_success is the % of 10,000 iterations that hit
+            sim_success_rate = m['sim_success'] 
+            
+            # FIX: Changed m['match'].markets[0].odds to m['match'].selected_market.odds
+            market_odds = m['match'].selected_market.odds
+            
+            # Implied probability from the bookmaker
+            market_implied = 1 / market_odds
+            
+            # A 'Value' score: How much higher is our simulation than the bookie's odds?
+            value_gap = max(0, sim_success_rate - market_implied)
+            
+            # Weight: 80% on pure simulation hit rate, 20% on the 'value' found
+            match_score = (sim_success_rate * 80) + (value_gap * 20)
+            total_score += match_score
 
-    @staticmethod
-    def rank_slips(slips: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Sorts generated slips so Laravel receives the 'best' options first.
-        Ranking criteria:
-        - Primary: Confidence Score (Probability of winning)
-        - Secondary: Possible Return (Reward for the risk)
-        """
-        # We use a lambda to sort by confidence descending, then return descending
-        return sorted(
-            slips, 
-            key=lambda x: (x['confidence_score'], x['possible_return']), 
-            reverse=True
-        )
+        # Average across all matches in the slip
+        avg_score = total_score / len(match_sims)
+        return round(avg_score, 2)
 
-    @staticmethod
-    def assign_risk_category(confidence: float) -> str:
-        """
-        Labels a slip based on its statistical profile.
-        Useful for Laravel UI to display tags like 'Safe' or 'High Risk'.
-        """
-        if confidence >= 0.75:
-            return "LOW_RISK"
-        elif confidence >= 0.40:
-            return "MODERATE_RISK"
+    def assign_risk_category(self, confidence_score: float) -> str:
+        if confidence_score > 75:
+            return "Low Risk"
+        elif confidence_score > 50:
+            return "Medium Risk"
         else:
-            return "HIGH_RISK"
+            return "High Risk"
+
+    def rank_slips(self, slips: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        # Sorts slips so Laravel receives the best ones first
+        return sorted(slips, key=lambda x: x['confidence_score'], reverse=True)

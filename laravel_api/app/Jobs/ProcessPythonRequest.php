@@ -656,7 +656,7 @@ class ProcessPythonRequest implements ShouldQueue
      */
     protected function sendToPythonEngine(array $payload)
     {
-        $pythonEngineUrl = config('python.engine_url');
+        $pythonEngineUrl = 'http://localhost:5000/generate-slips';
 
         if (!$pythonEngineUrl) {
             throw new \Exception('Python engine URL not configured');
@@ -684,7 +684,7 @@ class ProcessPythonRequest implements ShouldQueue
         return $response;
     }
 
-    /**
+    /**  MasterSlip::with('generatedSlips.legs')->find($id)).
      * Handle Python engine response
      *
      * @param \Illuminate\Http\Client\Response $response
@@ -695,22 +695,23 @@ class ProcessPythonRequest implements ShouldQueue
     {
         $result = $response->json();
 
-        if (!isset($result['status']) || $result['status'] !== 'success') {
-            throw new \Exception(
-                "Python engine returned error: " . ($result['error'] ?? 'Unknown error')
-            );
+        // Basic validation (keep your existing check)
+        if (!isset($result['generated_slips']) || empty($result['generated_slips'])) {
+            throw new \Exception('Python engine returned no generated slips');
         }
 
-        // Update slip status and store results
+        // Dispatch the new job to store slips in normalized tables
+        StoreGeneratedSlips::dispatch($masterSlip->id, $result);
+
+        // Optional: still store raw response if you want a backup
         $masterSlip->update([
-            'status' => 'processed',
-            'processed_at' => now(),
-            'python_response' => $result,
+            'python_response' => $result, // keep for debugging/history
+            'status'          => 'processing', // intermediate state
         ]);
 
-        Log::info('Python engine processed slip successfully', [
-            'master_slip_id' => $this->masterSlipId,
-            'response_status' => $result['status'],
+        Log::info('Python response received and StoreGeneratedSlipsJob dispatched', [
+            'master_slip_id' => $masterSlip->id,
+            'slips_count'    => count($result['generated_slips']),
         ]);
     }
 

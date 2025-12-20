@@ -2,96 +2,73 @@
 
 import uvicorn
 import time
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-import logging
 import os
-
-# Modular imports using the package structure we established
+import logging
+from logging.handlers import RotatingFileHandler
+from fastapi import FastAPI, HTTPException, Request
 from .schemas import MasterSlipRequest, EngineResponse
 from .engine import SlipBuilder
-from .utils import EngineHelpers
 
+# --- ROBUST LOGGING SETUP ---
+LOG_DIR = "logs"
+if not os.path.exists(LOG_DIR):
+    os.makedirs(LOG_DIR)
 
+log_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+log_file = os.path.join(LOG_DIR, "engine.log")
 
-# --- LOGGING SETUP ---
-if not os.path.exists("logs"):
-    os.makedirs("logs")
+# Setup Rotating File Handler (Max 5MB per file, keeps last 5 files)
+file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5)
+file_handler.setFormatter(log_formatter)
+file_handler.setLevel(logging.INFO)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler("logs/engine.log"), # Writes to file
-        logging.StreamHandler()                # Also prints to terminal
-    ]
-)
-logger = logging.getLogger("game_engine")
+# Setup Console Handler (to see logs in your terminal)
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(log_formatter)
+console_handler.setLevel(logging.INFO)
 
-app = FastAPI(
-    title="Football Game Engine",
-    description="Quantitative Match Analysis & Portfolio Generation Service",
-    version="1.1.0"
-)
-# Global instance of the orchestrator to keep the service warm and fast
+# Apply configuration
+logger = logging.getLogger("engine_logger")
+logger.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
+app = FastAPI(title="Football Game Engine")
 builder = SlipBuilder()
 
 @app.middleware("http")
-
 async def log_requests(request: Request, call_next):
-    """
-    Middleware to calculate processing time. 
-    Laravel reads the 'X-Process-Time' header to monitor engine load.
-    """
     start_time = time.time()
-    response = await call_next(request)
-    duration = time.time() - start_time
-    logger.info(f"Path: {request.url.path} | Duration: {duration:.4f}s | Status: {response.status_code}")
-    return response
-    """
-    Main Entry Point for the Laravel Orchestrator.
+    path = request.url.path
+    method = request.method
     
-    1. Receives complex Master Slip JSON.
-    2. Triggers Poisson Probability & Monte Carlo Simulations.
-    3. Returns 100 optimized and ranked slips.
-    """
+    try:
+        response = await call_next(request)
+        duration = time.time() - start_time
+        logger.info(f"{method} {path} | Status: {response.status_code} | Time: {duration:.4f}s")
+        return response
+    except Exception as e:
+        logger.error(f"Middleware caught crash: {str(e)}", exc_info=True)
+        raise
 
 @app.post("/generate-slips", response_model=EngineResponse)
 async def generate_slips(payload: MasterSlipRequest):
-    try:
-        master_id = payload.master_slip.master_slip_id
-        logger.info(f"Processing Master Slip: {master_id}")
-
-        # Run the core slip generation (Monte Carlo + coverage optimization)
-        generated_slips = builder.generate(payload)
-
-        return {
-            "master_slip_id": master_id,
-            "generated_slips": generated_slips
-        }
-
-    except ValueError as ve:
-        # Client-side issues (e.g., invalid payload, zero odds, empty matches)
-        logger.warning(f"Validation error for Master Slip {payload.master_slip.master_slip_id}: {str(ve)}")
-        raise HTTPException(status_code=400, detail=str(ve))
-
-    except Exception as e:
-        # Unexpected internal errors
-        timestamp = EngineHelpers.get_timestamp()
-        logger.error(
-            f"[{timestamp}] CRITICAL ERROR on Master Slip {payload.master_slip.master_slip_id}: {str(e)}",
-            exc_info=True
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="The analytical engine encountered a computational exception."
-        )
+    ms_id = payload.master_slip.master_slip_id
+    logger.info(f"--- Starting Generation for Master Slip: {ms_id} ---")
     
-@app.get("/health")
-async def health_check():
-    """Simple endpoint for Docker/Kubernetes or Laravel to check if the engine is alive."""
-    return {"status": "online", "engine_version": "1.1.0"}
+    try:
+        # Pass the payload to the orchestrator
+        results = builder.generate(payload)
+        
+        logger.info(f"Successfully generated 100 slips for {ms_id}")
+        return {
+            "master_slip_id": ms_id,
+            "generated_slips": results
+        }
+    except Exception as e:
+        # This captures the EXACT line number in slip_builder.py where it fails
+        logger.error(f"Generation Failed for {ms_id} | Error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Engine Error: {str(e)}")
 
 if __name__ == "__main__":
-    # Running on 0.0.0.0 makes the service accessible inside Docker or local networks
     uvicorn.run("game_engine.app:app", host="0.0.0.0", port=5000, reload=True)

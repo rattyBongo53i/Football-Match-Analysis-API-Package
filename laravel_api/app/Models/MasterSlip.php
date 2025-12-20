@@ -32,4 +32,9 @@ class MasterSlip extends Model
     {
         return $this->hasMany(MasterSlipMatch::class);
     }
+
+    public function generatedSlips()
+    {
+        return $this->hasMany(GeneratedSlip::class);
+    }
 }

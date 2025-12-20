@@ -830,8 +830,9 @@ public function generatePredictions(string $id): JsonResponse
     //Database Logging: You can save this processing time in your Laravel match_analysis_logs table
     //This helps you track which types of slips (e.g., slips with 20 matches vs 5 matches) take the most computational effort.
 
- public function generateEngineSlips($masterSlipData)
+ public function generateEngineSlips(Request $request)
         {
+            $masterSlipData = $request->master_slip;
             // 1. Send the POST request to the Python Engine
             $response = Http::post('http://localhost:5000/generate-slips', $masterSlipData);
 

@@ -283,7 +283,17 @@ export const generatorAPI = {
   getJobStatus: (jobId) => 
     withRetry(() => createApiClient(createCancelToken().token).get(`${ENDPOINTS.GENERATOR}/status/${jobId}`)),
 };
-
+// Add polling function
+const pollForResults = async (slipId, interval = 2000, maxAttempts = 30) => {
+    for (let i = 0; i < maxAttempts; i++) {
+        const response = await api.get(`/slips/${slipId}/status`);
+        if (response.data.status === 'completed') {
+            return await api.get(`/slips/${slipId}/results`);
+        }
+        await new Promise(resolve => setTimeout(resolve, interval));
+    }
+    throw new Error('Timeout waiting for results');
+};
 // Health check
 export const checkHealth = () => 
   withRetry(() => createApiClient(createCancelToken().token).get(ENDPOINTS.HEALTH, { timeout: 3000 }));

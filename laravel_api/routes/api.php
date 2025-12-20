@@ -21,7 +21,7 @@ use App\Http\Controllers\Api\MasterSlipController;
 // routes/api.php
 use App\Http\Controllers\Api\PredictionController;
 
-Route::post('/matches/{id}/try-payload', [MatchController::class, 'generateEngineSlips']);
+Route::post('/matches/try-payload', [MatchController::class, 'generateEngineSlips']);
 
 
 Route::post('/matches/{id}/generate-predictions', [MatchController::class, 'generatePredictions']);
