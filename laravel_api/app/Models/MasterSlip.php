@@ -21,6 +21,7 @@ class MasterSlip extends Model
         'engine_status',
         'analysis_quality',
         'notes',
+        'name',
 
         'total_odds',
         'estimated_payout',
@@ -70,9 +71,9 @@ class MasterSlip extends Model
 
     public function matches()
     {
-        return $this->belongsToMany(MatchModel::class, 'master_slip_matches', 'master_slip_id')
+        return $this->belongsToMany(MatchModel::class, 'master_slip_matches', 'master_slip_id', 'match_id')
             ->using(MasterSlipMatch::class)
-            ->withPivot('market', 'selection', 'odds', 'match_data')
+            ->withPivot('id', 'market', 'selection', 'odds', 'match_data', 'created_at', 'updated_at')
             ->withTimestamps();
     }
 

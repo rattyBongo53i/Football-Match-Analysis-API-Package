@@ -39,7 +39,10 @@ const slipApi = {
   // Update a slip
   updateSlip: async (id, slipData) => {
     try {
-      const response = await axios.put(`${API_URL}/slips/${id}`, slipData);
+      const response = await axios.put(
+        `${API_URL}/single-slips/${id}`,
+        slipData
+      );
       return response.data;
     } catch (error) {
       console.error("Error updating slip:", error);
@@ -61,7 +64,7 @@ const slipApi = {
   // Get all matches from matches table
   getAllMatches: async (params = {}) => {
     try {
-      const response = await axios.get(`${API_URL}/matches`, { params });
+      const response = await axios.get(`${API_URL}/matches`);
       return response.data;
     } catch (error) {
       console.error("Error fetching matches:", error);

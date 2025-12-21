@@ -95,10 +95,10 @@ class MatchModel extends Model
         return $this->hasMany(MatchMarket::class, 'match_id');
     }
 
-    public function slipMatches()
-    {
-        return $this->hasMany(SlipMatch::class, 'match_id');
-    }
+    // public function slipMatches()
+    // {
+    //     return $this->hasMany(SlipMatch::class, 'match_id');
+    // }
 
     public function predictions()
     {
@@ -135,11 +135,16 @@ class MatchModel extends Model
     // =======================
 
     public function masterSlips()
-        {
-            return $this->belongsToMany(MasterSlip::class, 'master_slip_matches')
-                        ->using(MasterSlipMatch::class)
-                        ->withPivot('id', 'market', 'selection', 'odds', 'match_data', 'created_at', 'updated_at')
-                        ->withTimestamps();
-        }
+    {
+        return $this->belongsToMany(MasterSlip::class, 'master_slip_matches', 'match_id', 'master_slip_id')
+            ->using(MasterSlipMatch::class)
+            ->withPivot('id', 'market', 'selection', 'odds', 'match_data', 'created_at', 'updated_at')
+            ->withTimestamps();
+    }
+
+    public function slipMatches()
+    {
+        return $this->hasMany(MasterSlipMatch::class, 'match_id');
+    }
 
 }

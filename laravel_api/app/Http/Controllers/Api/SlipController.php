@@ -1071,6 +1071,79 @@ class SlipController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Update an existing master slip.
+     *
+     * This endpoint updates the details of a master slip, such as name, stake, notes, etc.
+     * It returns the updated slip information.
+     *
+     * @param Request $request
+     * @param string $id The UUID or ID of the master slip to update
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateSlip(Request $request, string $id)
+    {
+        try {
+            $masterSlip = MasterSlip::findOrFail($id);
+
+            // Validate request data
+            $validated = $request->validate([
+                'name' => 'string|max:255',
+                'stake' => 'numeric|min:0',
+                'currency' => 'string|max:3',
+                'notes' => 'nullable|string',
+                // Add more fields as needed based on model
+            ]);
+
+            // Update the master slip
+            $masterSlip->update($validated);
+
+            $masterSlip->refresh();
+
+            // Reload with relations for fresh data
+            $masterSlip->load(['matches', 'slipMatches', 'generatedSlips']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Slip updated successfully',
+                'data' => [
+                    'id' => $masterSlip->id,
+                    'name' => $masterSlip->name ?? 'Unnamed Slip',
+                    'stake' => (float) $masterSlip->stake,
+                    'currency' => $masterSlip->currency ?? 'EUR',
+                    'status' => $masterSlip->status ?? 'draft',
+                    'engine_status' => $masterSlip->engine_status ?? 'pending',
+                    'analysis_quality' => $masterSlip->analysis_quality ?? 'medium',
+                    'notes' => $masterSlip->notes,
+                    'slip_data' => $masterSlip->slip_data ?? [],
+                    'created_at' => $masterSlip->created_at?->toISOString(),
+                    'updated_at' => $masterSlip->updated_at?->toISOString(),
+                    'processing_started_at' => $masterSlip->processing_started_at?->toISOString(),
+                    'processing_completed_at' => $masterSlip->processing_completed_at?->toISOString(),
+                    'total_odds' => (float) $masterSlip->total_odds,
+                    'estimated_payout' => (float) $masterSlip->estimated_payout,
+                    'matches_count' => $masterSlip->matches()->count(),
+                    'generated_slips_count' => $masterSlip->generatedSlips()->count(),
+                    'alternative_slips_count' => $masterSlip->alternative_slips_count,
+                ]
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Slip not found',
+                'error' => 'The requested slip does not exist.'
+            ], Response::HTTP_NOT_FOUND);
+        } catch (\Exception $e) {
+            Log::error('Failed to update slip: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update slip',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
 }
 
 /***

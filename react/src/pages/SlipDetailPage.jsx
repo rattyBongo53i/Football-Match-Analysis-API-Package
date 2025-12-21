@@ -104,20 +104,30 @@ const SlipDetailPage = () => {
   };
 
   // Handle slip update
-  const handleUpdateSlip = async () => {
-    try {
-      const response = await slipApi.updateSlip(id, editingSlip);
-      if (response.success) {
-        setSlip(response.data);
-        setEditDialog(false);
-        setSuccess("Slip updated successfully!");
-        setTimeout(() => setSuccess(null), 3000);
-      }
-    } catch (err) {
-      console.error("Failed to update slip:", err);
-      setError("Failed to update slip. Please try again.");
+const handleUpdateSlip = async () => {
+  try {
+    const response = await slipApi.updateSlip(id, editingSlip);
+    if (response.success) {
+      // Merge the updated fields into the existing slip object
+      setSlip((prevSlip) => ({
+        ...prevSlip,
+        ...response.data, // This updates name, stake, notes, updated_at, etc.
+        // Preserve relations that weren't returned
+        matches: prevSlip.matches,
+        generatedSlips: prevSlip.generatedSlips,
+        slipMatches: prevSlip.slipMatches,
+        // Add any other relations your UI uses
+      }));
+
+      setEditDialog(false);
+      setSuccess("Slip updated successfully!");
+      setTimeout(() => setSuccess(null), 3000);
     }
-  };
+  } catch (err) {
+    console.error("Failed to update slip:", err);
+    setError("Failed to update slip. Please try again.");
+  }
+};
 
   // Handle slip deletion
   const handleDeleteSlip = async () => {

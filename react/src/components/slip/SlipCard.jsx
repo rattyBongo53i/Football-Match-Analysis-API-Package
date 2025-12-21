@@ -9,7 +9,8 @@ import {
   Button,
   IconButton,
   LinearProgress,
-  Divider,
+    Divider,
+  Grid,
 } from "@mui/material";
 import {
   ReceiptLong as SlipIcon,

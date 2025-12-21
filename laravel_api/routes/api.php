@@ -204,7 +204,8 @@ Route::get('/da-master-slips/{id}', [SlipController::class, 'DagetSlipDetail']);
 Route::get('/slips/{id}/matches', [SlipController::class, 'getSlipMatches']);
 Route::get('/slips/{id}/generated', [SlipController::class, 'DagetGeneratedSlips']);
 Route::post('/slips/{id}/analyze', [SlipController::class, 'analyzeSlip']);
-Route::put('/slips/{id}', [SlipController::class, 'updateSlip']); // For editing
+Route::put('/single-slips/{id}', [SlipController::class, 'updateSlip']); // For editing
+
 
     // Market endpoints
     Route::get('markets', [MarketController::class, 'index']);

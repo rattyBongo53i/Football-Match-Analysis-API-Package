@@ -24,7 +24,7 @@ import {
   CheckCircle as AddedIcon,
   Clear as ClearIcon,
 } from "@mui/icons-material";
-import { api } from "../../services/api";
+import slipApi from "../../services/api/slipApi";
 
 const MatchSelectionDialog = ({
   open,
@@ -47,10 +47,17 @@ const MatchSelectionDialog = ({
   const fetchMatches = async () => {
     setLoading(true);
     setError(null);
+    console.log("Modal triggered, getting all matches");
+
     try {
-      const response = await api.get("/matches?limit=50&status=upcoming");
-      if (response.data.success) {
-        const matches = response.data.data || [];
+      // Use the slipApi service instead of direct axios call
+      const response = await slipApi.getAllMatches({
+        limit: 50,
+        status: "upcoming",
+      });
+
+      if (response.success) {
+        const matches = response.data || [];
         setMatches(matches);
         setFilteredMatches(matches);
       }
@@ -71,9 +78,9 @@ const MatchSelectionDialog = ({
 
     const filtered = matches.filter(
       (match) =>
-        match.home_team.toLowerCase().includes(term.toLowerCase()) ||
-        match.away_team.toLowerCase().includes(term.toLowerCase()) ||
-        match.league.toLowerCase().includes(term.toLowerCase())
+        match.home_team?.toLowerCase().includes(term.toLowerCase()) ||
+        match.away_team?.toLowerCase().includes(term.toLowerCase()) ||
+        match.league?.toLowerCase().includes(term.toLowerCase())
     );
     setFilteredMatches(filtered);
   };
@@ -91,7 +98,22 @@ const MatchSelectionDialog = ({
   const isAlreadyAdded = (matchId) => existingMatchIds.includes(matchId);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      PaperProps={{
+        // Fix the elevation issue by using a valid elevation
+        elevation: 8,
+        sx: {
+          borderRadius: 2,
+          minHeight: "60vh",
+          maxHeight: "80vh",
+          overflow: "hidden",
+        },
+      }}
+    >
       <DialogTitle>
         <Box
           sx={{
@@ -107,7 +129,7 @@ const MatchSelectionDialog = ({
         </Box>
       </DialogTitle>
 
-      <DialogContent>
+      <DialogContent dividers sx={{ p: 3 }}>
         {/* Search Bar */}
         <TextField
           fullWidth
@@ -131,7 +153,9 @@ const MatchSelectionDialog = ({
         )}
 
         {loading ? (
-          <LinearProgress />
+          <Box sx={{ width: "100%" }}>
+            <LinearProgress />
+          </Box>
         ) : filteredMatches.length === 0 ? (
           <Alert severity="info">
             {search
@@ -144,7 +168,17 @@ const MatchSelectionDialog = ({
               const added = isAlreadyAdded(match.id);
               return (
                 <Grid item xs={12} md={6} key={match.id}>
-                  <Card variant="outlined" sx={{ height: "100%" }}>
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      height: "100%",
+                      transition: "all 0.2s",
+                      "&:hover": {
+                        transform: "translateY(-2px)",
+                        boxShadow: 3,
+                      },
+                    }}
+                  >
                     <CardContent>
                       <Box
                         sx={{
@@ -188,6 +222,14 @@ const MatchSelectionDialog = ({
                             variant="outlined"
                           />
                         ))}
+                        {!match.markets && (
+                          <Chip
+                            label="No markets available"
+                            size="small"
+                            variant="outlined"
+                            color="default"
+                          />
+                        )}
                       </Box>
 
                       <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -197,6 +239,7 @@ const MatchSelectionDialog = ({
                           startIcon={added ? <AddedIcon /> : <AddIcon />}
                           onClick={() => !added && onSelectMatch(match)}
                           disabled={added}
+                          sx={{ minWidth: 120 }}
                         >
                           {added ? "Already Added" : "Add to Slip"}
                         </Button>

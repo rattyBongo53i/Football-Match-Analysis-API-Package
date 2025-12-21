@@ -22,13 +22,15 @@ const router = createBrowserRouter([
       { path: "matches", element: <MatchesList /> },
       { path: "matches/:id", element: <MatchDetails /> },
       { path: "matches/:id/results", element: <MatchResults /> },
-      { path: "generatedslips/:masterSlipId/slips", element: <GeneratedSlips /> },
+      {
+        path: "generatedslips/:masterSlipId/slips",
+        element: <GeneratedSlips />,
+      },
       { path: "slips", element: <SlipsPage /> },
+      { path: "slips/create", element: <SlipsPage /> },
       { path: "slip/:id", element: <SlipDetailPage /> },
       { path: "*", element: <NotFound /> },
-      // { path: "slips/master", element: <SlipMaster /> },
-
-
+      // { path: "slips/master", element: <SlipMaster /> }, /
     ],
   },
 ]);

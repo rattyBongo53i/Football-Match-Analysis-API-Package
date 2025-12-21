@@ -1,138 +1,193 @@
-import React, { useState } from 'react';
+// components/betslip/AddToBetslipButton.jsx
+import React, { useState } from "react";
 import {
   Button,
-  CircularProgress,
+  Chip,
   Tooltip,
-  Snackbar,
-  Alert
-} from '@mui/material';
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
+  Typography,
+  Box,
+  CircularProgress,
+} from "@mui/material";
 import {
-  PlaylistAdd as AddIcon,
-  PlaylistAddCheck as AddedIcon,
-  Error as ErrorIcon
-} from '@mui/icons-material';
-import { useBetslip } from '../../contexts/BetslipContext';
-import './AddToBetslipButton.css';
+  Add as AddIcon,
+  CheckCircle as CheckIcon,
+  ReceiptLong as SlipIcon,
+  Close as CloseIcon,
+} from "@mui/icons-material";
+import { useBetslip } from "../../contexts/BetslipContext";
 
-const AddToBetslipButton = ({ match, size = "medium", variant = "outlined" }) => {
+const AddToBetslipButton = ({
+  match,
+  size = "medium",
+  variant = "outlined",
+}) => {
+  const {
+    addMatchToBetslip,
+    isMatchInBetslip,
+    getActiveSlips,
+    getCurrentSlipId,
+    setCurrentSlipId,
+  } = useBetslip();
+
+  const [selectingSlip, setSelectingSlip] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: "",
-    severity: "success",
-  });
 
-  const { addMatchToBetslip, isMatchInBetslip, getBetslipSummary } =
-    useBetslip();
+  const isInBetslip = isMatchInBetslip(match.id);
+  const currentSlipId = getCurrentSlipId();
+  const activeSlips = getActiveSlips();
 
-  // Update the handleAddToBetslip function:
-  const handleAddToBetslip = async () => {
+  const handleAddToBetslip = async (slipId = null) => {
     if (isInBetslip) return;
-
-    const summary = getBetslipSummary();
-    if (!summary.canAddMore) {
-      setSnackbar({
-        open: true,
-        message: "Betslip is full (maximum 10 matches)",
-        severity: "warning",
-      });
-      return;
-    }
 
     setAdding(true);
     try {
-      // This now calls the backend-persisted version
-      await addMatchToBetslip(match);
-      setSnackbar({
-        open: true,
-        message: "Match added to betslip!",
-        severity: "success",
-      });
+      await addMatchToBetslip(match, slipId);
+      setSelectingSlip(false);
     } catch (error) {
-      console.error("Failed to add to betslip:", error);
-      setSnackbar({
-        open: true,
-        message: error.message || "Failed to add match to betslip",
-        severity: "error",
-      });
+      console.error("Failed to add match to betslip:", error);
     } finally {
       setAdding(false);
     }
   };
 
-  const isInBetslip = isMatchInBetslip(match.id);
-  const summary = getBetslipSummary();
+  const handleOpenSlipSelection = () => {
+    if (isInBetslip) return;
 
-  const getButtonProps = () => {
-    const baseProps = {
-      size,
-      variant,
-      onClick: handleAddToBetslip,
-      disabled: adding || isInBetslip || !summary.canAddMore,
-      startIcon: adding ? (
-        <CircularProgress size={16} />
-      ) : isInBetslip ? (
-        <AddedIcon />
-      ) : (
-        <AddIcon />
-      ),
-    };
-
-    if (isInBetslip) {
-      return {
-        ...baseProps,
-        color: "success",
-        children: "In Betslip",
-      };
+    // If there's a current slip ID, use it directly
+    if (currentSlipId) {
+      handleAddToBetslip(currentSlipId);
+    } else {
+      // Otherwise show slip selection
+      setSelectingSlip(true);
     }
-
-    if (!summary.canAddMore) {
-      return {
-        ...baseProps,
-        color: "warning",
-        children: "Betslip Full",
-        startIcon: <ErrorIcon />,
-      };
-    }
-
-    return {
-      ...baseProps,
-      color: "primary",
-      children: adding ? "Adding..." : "Add to Betslip",
-    };
   };
 
-  const buttonProps = getButtonProps();
-  const tooltipTitle = isInBetslip
-    ? "Already in betslip"
-    : !summary.canAddMore
-      ? "Betslip is full (max 10 matches)"
-      : "Add to betslip";
+  const handleSelectSlip = (slipId) => {
+    setCurrentSlipId(slipId);
+    handleAddToBetslip(slipId);
+  };
+
+  const handleCreateNewSlip = () => {
+    // This should navigate to create slip page
+    // or trigger slip creation via context if available
+    window.location.href = "/slips/create";
+  };
+
+  if (isInBetslip) {
+    return (
+      <Tooltip title="Already in betslip">
+        <Chip
+          icon={<CheckIcon />}
+          label="In Betslip"
+          color="success"
+          variant="outlined"
+          size={size}
+        />
+      </Tooltip>
+    );
+  }
 
   return (
     <>
-      <Tooltip title={tooltipTitle}>
-        <span>
-          <Button {...buttonProps} />
-        </span>
-      </Tooltip>
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      <Button
+        variant={variant}
+        size={size}
+        startIcon={adding ? <CircularProgress size={20} /> : <AddIcon />}
+        onClick={handleOpenSlipSelection}
+        disabled={adding || isInBetslip}
       >
-        <Alert
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          severity={snackbar.severity}
-          variant="filled"
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+        {adding ? "Adding..." : "Add to Betslip"}
+      </Button>
+
+      {/* Slip Selection Dialog */}
+      <Dialog
+        open={selectingSlip}
+        onClose={() => setSelectingSlip(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box
+            display="flex"
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <Typography variant="h6">Select a Slip</Typography>
+            <IconButton onClick={() => setSelectingSlip(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Select which slip to add this match to:
+          </Typography>
+
+          {activeSlips.length === 0 ? (
+            <Box textAlign="center" py={3}>
+              <SlipIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+              <Typography variant="body1" gutterBottom>
+                No active slips found
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Create a new slip to add matches
+              </Typography>
+            </Box>
+          ) : (
+            <List>
+              {activeSlips.map((slip) => (
+                <ListItem
+                  key={slip.id}
+                  button
+                  onClick={() => handleSelectSlip(slip.id)}
+                  sx={{
+                    borderRadius: 1,
+                    mb: 1,
+                    "&:hover": {
+                      backgroundColor: "action.hover",
+                    },
+                  }}
+                >
+                  <ListItemText
+                    primary={slip.name || `Slip #${slip.id}`}
+                    secondary={`${slip.matches_count || 0} matches • ${slip.status || "active"}`}
+                  />
+                  {slip.id === currentSlipId && (
+                    <ListItemSecondaryAction>
+                      <Chip label="Current" size="small" color="primary" />
+                    </ListItemSecondaryAction>
+                  )}
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setSelectingSlip(false)} variant="outlined">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreateNewSlip}
+            variant="contained"
+            startIcon={<AddIcon />}
+          >
+            Create New Slip
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
-};;
+};
 
 export default AddToBetslipButton;
