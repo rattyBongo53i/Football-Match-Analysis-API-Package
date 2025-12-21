@@ -1,0 +1,118 @@
+/* SlipDetailPage.css */
+.slip-detail-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.match-card {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.match-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.odds-chip {
+  font-weight: bold;
+  font-size: 0.875rem;
+}
+
+.confidence-bar {
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.risk-badge {
+  border-radius: 12px;
+  padding: 4px 12px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.risk-low {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.risk-medium {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.risk-high {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* Animation for new match addition */
+@keyframes highlight {
+  0% { background-color: rgba(76, 175, 80, 0.3); }
+  100% { background-color: transparent; }
+}
+
+.new-match {
+  animation: highlight 2s ease-out;
+}
+
+/* Sticky action buttons on mobile */
+@media (max-width: 600px) {
+  .mobile-sticky-actions {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 16px;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+  }
+}
+
+/* Custom scrollbar */
+.match-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.match-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.match-list::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.match-list::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Status indicators */
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.status-active {
+  background-color: #4caf50;
+}
+
+.status-processing {
+  background-color: #ff9800;
+}
+
+.status-completed {
+  background-color: #2196f3;
+}
+
+.status-failed {
+  background-color: #f44336;
+}

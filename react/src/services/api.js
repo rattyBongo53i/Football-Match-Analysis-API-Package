@@ -264,7 +264,7 @@ export const slipAPI = {
     withRetry(() => createApiClient(createCancelToken().token).get(`${ENDPOINTS.SLIPS}/${id}`)),
 
   createSlip: (slipData) => 
-    withRetry(() => createApiClient(createCancelToken().token).post(ENDPOINTS.SLIPS, slipData)),
+    withRetry(() => createApiClient(createCancelToken().token).post(`${ENDPOINTS.SLIPS}/create`, slipData)),
 
   createMasterSlip: (slipData) => 
     withRetry(() => createApiClient(createCancelToken().token).post(`${ENDPOINTS.SLIPS}/master`, slipData)),
@@ -274,6 +274,18 @@ export const slipAPI = {
     apiCache.delete(`${ENDPOINTS.SLIPS}/${id}`);
     return withRetry(() => createApiClient(createCancelToken().token).delete(`${ENDPOINTS.SLIPS}/${id}`));
   },
+  
+  getSlipStatus: (id) => 
+    withRetry(() => createApiClient(createCancelToken().token).get(`${ENDPOINTS.SLIPS}/${id}/status`)),
+
+  getSlipResults: (id) => 
+    withRetry(() => createApiClient(createCancelToken().token).get(`${ENDPOINTS.SLIPS}/${id}/results`)),
+  //get matches from get/matches
+  getSlipMatches: (slipId) => 
+    withRetry(() => createApiClient(createCancelToken().token).get(`${ENDPOINTS.SLIPS}/${slipId}/matches`)),
+  //get all matches in matches table
+  getAllMatches: (params = {}) => 
+    withRetry(() => createApiClient(createCancelToken().token).get(ENDPOINTS.MATCHES, { params })),
 };
 
 export const generatorAPI = {
@@ -285,14 +297,21 @@ export const generatorAPI = {
 };
 // Add polling function
 const pollForResults = async (slipId, interval = 2000, maxAttempts = 30) => {
-    for (let i = 0; i < maxAttempts; i++) {
-        const response = await api.get(`/slips/${slipId}/status`);
-        if (response.data.status === 'completed') {
-            return await api.get(`/slips/${slipId}/results`);
-        }
-        await new Promise(resolve => setTimeout(resolve, interval));
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const response = await slipAPI.getSlipStatus(slipId);
+      if (response.data.status === "completed") {
+        return await slipAPI.getSlipResults(slipId);
+      }
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    } catch (error) {
+      if (error.isCancelled || error.response?.status === 404) {
+        throw error;
+      }
+      // Continue polling on other errors
     }
-    throw new Error('Timeout waiting for results');
+  }
+  throw new Error("Timeout waiting for results");
 };
 // Health check
 export const checkHealth = () => 
@@ -309,6 +328,7 @@ export const api = {
   generator: generatorAPI,
   health: { check: checkHealth },
   utils: { clearCache },
+  pollForResults,
 };
 
 // Default export (matchAPI for backward compatibility)

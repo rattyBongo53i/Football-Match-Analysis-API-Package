@@ -4,6 +4,8 @@ import { StepIconContainer } from "./styledComponents";
 const CustomStepIcon = (props) => {
   const { active, completed, icon } = props;
 
+  
+
   const icons = {
     1: "⚽",
     2: "📊",

@@ -128,4 +128,18 @@ class MatchModel extends Model
     {
         return $this->hasOne(MasterSlip::class, 'match_id');
     }
+
+    
+    // =======================
+    //      Slip Relationships
+    // =======================
+
+    public function masterSlips()
+        {
+            return $this->belongsToMany(MasterSlip::class, 'master_slip_matches')
+                        ->using(MasterSlipMatch::class)
+                        ->withPivot('id', 'market', 'selection', 'odds', 'match_data', 'created_at', 'updated_at')
+                        ->withTimestamps();
+        }
+
 }

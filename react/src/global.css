@@ -21,6 +21,11 @@
   background: #9E9E9E;
 }
 
+.main-content {
+  margin-left: 280px; /* Match sidebar width */
+  padding: 20px;
+  min-height: 100vh;
+}
 /* Global animations */
 @keyframes fadeIn {
   from {
@@ -236,3 +241,15 @@
   gap: 24px;
 }
 
+/* Responsive behavior */
+@media (max-width: 768px) {
+  .Sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+  }
+  
+  .main-content {
+    margin-left: 0;
+  }
+}

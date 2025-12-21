@@ -14,46 +14,43 @@ import {
 import { useBetslip } from '../../contexts/BetslipContext';
 import './AddToBetslipButton.css';
 
-const AddToBetslipButton = ({ match, size = "medium", variant = "outlined" }) => {
+const AddToBetslipButton = ({ match, size = 'medium', variant = 'outlined' }) => {
   const [adding, setAdding] = useState(false);
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: "",
-    severity: "success",
-  });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  const {
+    addMatchToBetslip,
+    isMatchInBetslip,
+    getBetslipSummary
+  } = useBetslip();
 
-  const { addMatchToBetslip, isMatchInBetslip, getBetslipSummary } =
-    useBetslip();
-
-  // Update the handleAddToBetslip function:
   const handleAddToBetslip = async () => {
     if (isInBetslip) return;
-
+    
     const summary = getBetslipSummary();
     if (!summary.canAddMore) {
       setSnackbar({
         open: true,
-        message: "Betslip is full (maximum 10 matches)",
-        severity: "warning",
+        message: 'Betslip is full (maximum 10 matches)',
+        severity: 'warning'
       });
       return;
     }
-
+    
     setAdding(true);
     try {
-      // This now calls the backend-persisted version
       await addMatchToBetslip(match);
       setSnackbar({
         open: true,
-        message: "Match added to betslip!",
-        severity: "success",
+        message: 'Match added to betslip!',
+        severity: 'success'
       });
     } catch (error) {
-      console.error("Failed to add to betslip:", error);
+      console.error('Failed to add to betslip:', error);
       setSnackbar({
         open: true,
-        message: error.message || "Failed to add match to betslip",
-        severity: "error",
+        message: 'Failed to add match to betslip',
+        severity: 'error'
       });
     } finally {
       setAdding(false);
@@ -69,45 +66,41 @@ const AddToBetslipButton = ({ match, size = "medium", variant = "outlined" }) =>
       variant,
       onClick: handleAddToBetslip,
       disabled: adding || isInBetslip || !summary.canAddMore,
-      startIcon: adding ? (
-        <CircularProgress size={16} />
-      ) : isInBetslip ? (
-        <AddedIcon />
-      ) : (
-        <AddIcon />
-      ),
+      startIcon: adding ? <CircularProgress size={16} /> : 
+                 isInBetslip ? <AddedIcon /> : 
+                 <AddIcon />
     };
 
     if (isInBetslip) {
       return {
         ...baseProps,
-        color: "success",
-        children: "In Betslip",
+        color: 'success',
+        children: 'In Betslip'
       };
     }
 
     if (!summary.canAddMore) {
       return {
         ...baseProps,
-        color: "warning",
-        children: "Betslip Full",
-        startIcon: <ErrorIcon />,
+        color: 'warning',
+        children: 'Betslip Full',
+        startIcon: <ErrorIcon />
       };
     }
 
     return {
       ...baseProps,
-      color: "primary",
-      children: adding ? "Adding..." : "Add to Betslip",
+      color: 'primary',
+      children: adding ? 'Adding...' : 'Add to Betslip'
     };
   };
 
   const buttonProps = getButtonProps();
-  const tooltipTitle = isInBetslip
-    ? "Already in betslip"
-    : !summary.canAddMore
-      ? "Betslip is full (max 10 matches)"
-      : "Add to betslip";
+  const tooltipTitle = isInBetslip 
+    ? 'Already in betslip' 
+    : !summary.canAddMore 
+      ? 'Betslip is full (max 10 matches)' 
+      : 'Add to betslip';
 
   return (
     <>
@@ -121,10 +114,10 @@ const AddToBetslipButton = ({ match, size = "medium", variant = "outlined" }) =>
         open={snackbar.open}
         autoHideDuration={3000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
           severity={snackbar.severity}
           variant="filled"
         >
@@ -133,6 +126,6 @@ const AddToBetslipButton = ({ match, size = "medium", variant = "outlined" }) =>
       </Snackbar>
     </>
   );
-};;
+};
 
 export default AddToBetslipButton;

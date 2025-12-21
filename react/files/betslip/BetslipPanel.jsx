@@ -85,26 +85,17 @@ const BetslipPanel = ({ open, onClose }) => {
       sx={{
         width: 400,
         flexShrink: 0,
-        "& .MuiDrawer-paper": {
+        '& .MuiDrawer-paper': {
           width: 400,
-          boxSizing: "border-box",
+          boxSizing: 'border-box',
         },
       }}
     >
-      <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Header */}
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Typography
-              variant="h6"
-              sx={{ display: "flex", alignItems: "center", gap: 1 }}
-            >
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CartIcon /> Betslip
               <Badge
                 badgeContent={betslipMatches.length}
@@ -112,35 +103,23 @@ const BetslipPanel = ({ open, onClose }) => {
                 sx={{ ml: 1 }}
               />
             </Typography>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                display: "block",
-                fontStyle: activeSlipId ? "normal" : "italic",
-              }}
-            >
-              {activeSlipId
-                ? `Slip ID: ${activeSlipId.substring(0, 8)}...`
-                : "No active slip"}
-            </Typography>
             <IconButton onClick={onClose} size="small">
               <CloseIcon />
             </IconButton>
           </Box>
-
+          
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             Build your accumulator with 5-10 matches
           </Typography>
         </Box>
 
         {/* Content */}
-        <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
+        <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
           {betslipLoading && <LinearProgress />}
-
+          
           {betslipMatches.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: "center" }}>
-              <CartIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+            <Paper sx={{ p: 4, textAlign: 'center' }}>
+              <CartIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
               <Typography variant="body1" color="text.secondary" gutterBottom>
                 Your betslip is empty
               </Typography>
@@ -163,54 +142,33 @@ const BetslipPanel = ({ open, onClose }) => {
                   Betslip Summary
                 </Typography>
                 <Divider sx={{ my: 1 }} />
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    mb: 1,
-                  }}
-                >
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="body2">Total Matches:</Typography>
                   <Typography variant="body2" fontWeight="bold">
                     {betslipMatches.length}
                   </Typography>
                 </Box>
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    mb: 1,
-                  }}
-                >
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="body2">Combined Odds:</Typography>
                   <Typography variant="body2" fontWeight="bold" color="primary">
                     {calculateTotalOdds()}x
                   </Typography>
                 </Box>
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    mb: 2,
-                  }}
-                >
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                   <Typography variant="body2">Status:</Typography>
                   <Chip
-                    label={
-                      summary.isAnalysisReady ? "Ready" : "Need more matches"
-                    }
-                    color={summary.isAnalysisReady ? "success" : "warning"}
+                    label={summary.isAnalysisReady ? 'Ready' : 'Need more matches'}
+                    color={summary.isAnalysisReady ? 'success' : 'warning'}
                     size="small"
                   />
                 </Box>
-
+                
                 {!summary.isAnalysisReady && (
                   <Alert severity="info" sx={{ mb: 2 }}>
-                    Add {5 - betslipMatches.length} more matches to start
-                    analysis
+                    Add {5 - betslipMatches.length} more matches to start analysis
                   </Alert>
                 )}
               </Paper>
@@ -229,35 +187,20 @@ const BetslipPanel = ({ open, onClose }) => {
         </Box>
 
         {/* Footer */}
-        <Box
-          sx={{
-            p: 2,
-            borderTop: 1,
-            borderColor: "divider",
-            bgcolor: "background.default",
-          }}
-        >
-          <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+        <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
+          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
             <Button
               fullWidth
               variant="contained"
               startIcon={<PlayIcon />}
               onClick={handleRunAnalysis}
-              disabled={
-                !summary.isAnalysisReady || analysisLoading || hasActiveJob
-              }
+              disabled={!summary.isAnalysisReady || analysisLoading || hasActiveJob}
               sx={{ flex: 2 }}
             >
-              {analysisLoading ? "Running..." : "Run ML Analysis"}
+              {analysisLoading ? 'Running...' : 'Run ML Analysis'}
             </Button>
-
-            <Tooltip
-              title={
-                activeSlipId
-                  ? "Clear betslip from database"
-                  : "Clear local betslip"
-              }
-            >
+            
+            <Tooltip title="Clear Betslip">
               <IconButton
                 onClick={clearBetslip}
                 disabled={betslipMatches.length === 0}
@@ -267,16 +210,12 @@ const BetslipPanel = ({ open, onClose }) => {
               </IconButton>
             </Tooltip>
           </Box>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            align="center"
-            display="block"
-          >
-            {summary.isAnalysisReady
-              ? "Ready to analyze 5-10 matches"
-              : `Add ${5 - betslipMatches.length} more match${5 - betslipMatches.length === 1 ? "" : "es"}`}
+          
+          <Typography variant="caption" color="text.secondary" align="center" display="block">
+            {summary.isAnalysisReady 
+              ? 'Ready to analyze 5-10 matches'
+              : `Add ${5 - betslipMatches.length} more match${5 - betslipMatches.length === 1 ? '' : 'es'}`
+            }
           </Typography>
         </Box>
       </Box>

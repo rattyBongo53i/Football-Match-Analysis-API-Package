@@ -64,102 +64,113 @@ export default function Sidebar() {
 
   return (
     <>
-    <div className="Sidebar">
-    <Paper
-      elevation={3}
-      sx={{
-        height: "100%",
-        borderRadius: 2,
-        backgroundColor: "background.paper",
-        border: "1px solid",
-        borderColor: "divider",
-      }}
-    >
-      <Box sx={{ p: 3 }}>
-        <Typography
-          variant="h6"
-          gutterBottom
+      <div
+        className="Sidebar"
+        style={{
+          position: "fixed",
+          left: 0,
+          top: 0,
+          height: "100vh",
+          width: "280px",
+          zIndex: 1000,
+          overflowY: "auto",
+          backgroundColor: "background.paper",
+        }}
+      >
+        <Paper
+          elevation={3}
           sx={{
-            color: "primary.main",
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
+            height: "100%",
+            borderRadius: 0,
+            backgroundColor: "background.paper",
+            borderRight: "1px solid",
+            borderColor: "divider",
           }}
         >
-          <Dashboard color="primary" />
-          Betting System
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block", mb: 2 }}
-        >
-          Navigation Menu
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-      </Box>
-
-      <List sx={{ p: 2 }}>
-        {navItems.map((item) => (
-          <ListItem
-            key={item.path}
-            component={NavLink}
-            to={item.path}
-            sx={(theme) => ({
-              borderRadius: 2,
-              mb: 1,
-              textDecoration: "none",
-              transition: "all 0.2s ease-in-out",
-              "&.active": activeStyle,
-              ...inactiveStyle,
-            })}
-          >
-            <Box
+          <Box sx={{ p: 3 }}>
+            <Typography
+              variant="h6"
+              gutterBottom
               sx={{
+                color: "primary.main",
+                fontWeight: 600,
                 display: "flex",
                 alignItems: "center",
-                gap: 2,
-                width: "100%",
-                py: 0.5,
+                gap: 1,
               }}
             >
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 24,
-                  height: 24,
-                }}
+              <Dashboard color="primary" />
+              Betting System
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mb: 2 }}
+            >
+              Navigation Menu
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+          </Box>
+
+          <List sx={{ p: 2 }}>
+            {navItems.map((item) => (
+              <ListItem
+                key={item.path}
+                component={NavLink}
+                to={item.path}
+                sx={(theme) => ({
+                  borderRadius: 2,
+                  mb: 1,
+                  textDecoration: "none",
+                  transition: "all 0.2s ease-in-out",
+                  "&.active": activeStyle,
+                  ...inactiveStyle,
+                })}
               >
-                {React.cloneElement(item.icon, { fontSize: "small" })}
-              </Box>
-              <ListItemText
-                primary={item.text}
-                primaryTypographyProps={{
-                  fontWeight: 500,
-                  fontSize: "0.95rem",
-                }}
-              />
-            </Box>
-          </ListItem>
-        ))}
-      </List>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 2,
+                    width: "100%",
+                    py: 0.5,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 24,
+                      height: 24,
+                    }}
+                  >
+                    {React.cloneElement(item.icon, { fontSize: "small" })}
+                  </Box>
+                  <ListItemText
+                    primary={item.text}
+                    primaryTypographyProps={{
+                      fontWeight: 500,
+                      fontSize: "0.95rem",
+                    }}
+                  />
+                </Box>
+              </ListItem>
+            ))}
+          </List>
 
-      <Box sx={{ p: 3, mt: "auto" }}>
-        <Divider sx={{ mb: 2 }} />
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block" }}
-        >
-          Version 1.0.0
-        </Typography>
-      </Box>
-    </Paper>
-    </div>
+          <Box sx={{ p: 3, mt: "auto" }}>
+            <Divider sx={{ mb: 2 }} />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block" }}
+            >
+              Version 1.0.0
+            </Typography>
+          </Box>
+        </Paper>
+      </div>
     </>
-
   );
 }

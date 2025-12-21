@@ -194,9 +194,18 @@ Route::prefix('master-slips')->group(function () {
 // Direct slip routes for convenience
 Route::get('/slip/{generatedSlipId}', [SlipController::class, 'getSlipDetail']);
 
+Route::post('/slips/create', [SlipController::class, 'createSlip']);
+Route::post('/slips/{slip}/add-match', [SlipController::class, 'addMatchToSlip']);
+Route::delete('/slips/{slip}/remove-match/{matchId}', [SlipController::class, 'removeMatchFromSlip']);
+Route::get('/master-slips', [SlipController::class, 'getMasterSlips']);
+Route::get('/master-slips/{id}', [SlipController::class, 'DagetMasterSlip']);
 
+Route::get('/da-master-slips/{id}', [SlipController::class, 'DagetSlipDetail']);
+Route::get('/slips/{id}/matches', [SlipController::class, 'getSlipMatches']);
+Route::get('/slips/{id}/generated', [SlipController::class, 'DagetGeneratedSlips']);
+Route::post('/slips/{id}/analyze', [SlipController::class, 'analyzeSlip']);
+Route::put('/slips/{id}', [SlipController::class, 'updateSlip']); // For editing
 
-    
     // Market endpoints
     Route::get('markets', [MarketController::class, 'index']);
     

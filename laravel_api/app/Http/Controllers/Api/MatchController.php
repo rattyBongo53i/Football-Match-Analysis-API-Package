@@ -159,7 +159,7 @@ class MatchController extends Controller
                 Log::info('markets stored', ['time' => $marketsTime - $h2hTime]);
             }
 
-            // ProcessMatchForML::dispatch($match->id, 'full');
+            ProcessMatchForML::dispatch($match->id, 'full');
 
             return response()->json([
                 'success' => true,
