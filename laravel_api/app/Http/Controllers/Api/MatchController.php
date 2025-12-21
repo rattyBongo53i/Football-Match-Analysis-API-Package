@@ -93,7 +93,6 @@ class MatchController extends Controller
                     'total' => $matches->total(),
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Failed to retrieve matches', ['error' => $e->getMessage()]);
 
@@ -109,9 +108,13 @@ class MatchController extends Controller
      */
     public function store(StoreMatchRequest $request): JsonResponse
     {
+        set_time_limit(60);
 
         // return all request data in json 
-       
+        // return response()->json($request->all());
+
+        $start = microtime(true);
+        Log::info('store started');
 
         DB::beginTransaction();
 
@@ -120,36 +123,49 @@ class MatchController extends Controller
             $homeTeam = $this->teamService->resolveTeam($request->home_team, $request->league);
             $awayTeam = $this->teamService->resolveTeam($request->away_team, $request->league);
 
+            $teamResolveTime = microtime(true);
+            Log::info('Teams resolved', ['time' => $teamResolveTime - $start]);
+
             // Prepare match data
             $matchData = $this->prepareMatchData($request, $homeTeam, $awayTeam);
 
             // Create match
             $match = MatchModel::create($matchData);
 
+            $createTime = microtime(true);
+            Log::info('Match created', ['time' => $createTime - $teamResolveTime]);
+
             // Store team forms if provided
             $this->storeTeamForms($match, $homeTeam, $awayTeam, $request);
+            $formsTime = microtime(true);
+            Log::info('Forms stored', ['time' => $formsTime - $createTime]);
 
             // Store head-to-head if provided
             $this->storeHeadToHead($match, $request);
+            $h2hTime = microtime(true);
+            Log::info('H2H stored', ['time' => $h2hTime - $formsTime]);
 
             DB::commit();
 
             // Dispatch ML processing job
-            // ProcessMatchForML::dispatch($match->id);
 
             Log::info('Match created successfully', ['match_id' => $match->id]);
 
             //store markets for this match
             if ($request->has('markets')) {
                 $this->storeMarkets($match->id, $request->markets);
+
+                $marketsTime = microtime(true);
+                Log::info('markets stored', ['time' => $marketsTime - $h2hTime]);
             }
+
+            // ProcessMatchForML::dispatch($match->id, 'full');
 
             return response()->json([
                 'success' => true,
                 'message' => 'Match created successfully',
                 'data' => $match->load(['homeTeam', 'awayTeam', 'teamForms', 'headToHead']),
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -173,7 +189,7 @@ class MatchController extends Controller
     {
         try {
 
-        $match = MatchModel::query()
+            $match = MatchModel::query()
                 ->select([
                     'id',
                     'home_team',           // ← string name (denormalized)
@@ -192,14 +208,13 @@ class MatchController extends Controller
                     'headToHead',     // optional: keep if you want H2H summary
                     'teamForms',      // optional: keep if you want form count/stats
                 ])->findOrFail($id);
-                // ->withCount('markets as markets_count') // ← shows number of markets
-    
+            // ->withCount('markets as markets_count') // ← shows number of markets
+
 
             return response()->json([
                 'success' => true,
                 'data' => $match,
             ]);
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json([
                 'success' => false,
@@ -275,7 +290,6 @@ class MatchController extends Controller
                 'message' => 'Match updated successfully',
                 'data' => $match->fresh(['homeTeam', 'awayTeam', 'teamForms', 'headToHead']),
             ]);
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json([
                 'success' => false,
@@ -325,7 +339,6 @@ class MatchController extends Controller
                 'success' => true,
                 'message' => 'Match deleted successfully',
             ]);
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json([
                 'success' => false,
@@ -370,7 +383,6 @@ class MatchController extends Controller
                     'total' => $matches->total(),
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Failed to retrieve ML-ready matches', ['error' => $e->getMessage()]);
 
@@ -390,17 +402,17 @@ class MatchController extends Controller
         return [
             'home_team' => $homeTeam->name,
             'away_team' => $awayTeam->name,
-            'home_team_id' => $homeTeam->id,
-            'away_team_id' => $awayTeam->id,
+            'home_id' => $homeTeam->id,
+            'away_id' => $awayTeam->id,
             'league' => trim($request->league),
             'competition' => $request->competition ?? trim($request->league),
             'match_date' => $request->match_date,
             'match_time' => $request->match_time,
             'venue' => $request->venue,
-            'weather_conditions' => $request->weather_conditions ?? null,
-            'referee' => $request->referee,
-            'importance' => $request->importance,
-            'tv_coverage' => $request->tv_coverage,
+            'weather' => $request->weather ?? null,
+            'referee' => $request->referee ?? null,
+            'importance' => $request->importance ?? null,
+            'tv_coverage' => $request->tv_coverage ?? null,
             'predicted_attendance' => (int) ($request->predicted_attendance ?? 0),
             'for_ml_training' => (bool) ($request->for_ml_training ?? true),
             'prediction_ready' => (bool) ($request->prediction_ready ?? false),
@@ -415,39 +427,47 @@ class MatchController extends Controller
     private function storeTeamForms(MatchModel $match, Team $homeTeam, Team $awayTeam, $request): void
     {
         if ($request->filled('home_form')) {
-            Team_Form::create([
-                'match_id' => $match->id,
-                'team_id' => $homeTeam->code,
-                'venue' => 'home',
-                'form_string' => $request->home_form['form_string'] ?? '',
-                'matches_played' => (int) ($request->home_form['matches_played'] ?? 0),
-                'wins' => (int) ($request->home_form['wins'] ?? 0),
-                'draws' => (int) ($request->home_form['draws'] ?? 0),
-                'losses' => (int) ($request->home_form['losses'] ?? 0),
-                'avg_goals_scored' => (float) ($request->home_form['avg_goals_scored'] ?? 0),
-                'avg_goals_conceded' => (float) ($request->home_form['avg_goals_conceded'] ?? 0),
-                'form_rating' => (float) ($request->home_form['form_rating'] ?? 5),
-                'form_momentum' => (float) ($request->home_form['form_momentum'] ?? 0),
-                'raw_form' => $request->home_form['raw_form'] ?? [],
-            ]);
+            Team_Form::updateOrCreate(
+                [
+                    'match_id' => $match->id,
+                    'team_id' => $homeTeam->code,
+                    'venue' => 'home',
+                ],
+                [
+                    'form_string' => $request->home_form['form_string'] ?? '',
+                    'matches_played' => (int) ($request->home_form['matches_played'] ?? 0),
+                    'wins' => (int) ($request->home_form['wins'] ?? 0),
+                    'draws' => (int) ($request->home_form['draws'] ?? 0),
+                    'losses' => (int) ($request->home_form['losses'] ?? 0),
+                    'avg_goals_scored' => (float) ($request->home_form['avg_goals_scored'] ?? 0),
+                    'avg_goals_conceded' => (float) ($request->home_form['avg_goals_conceded'] ?? 0),
+                    'form_rating' => (float) ($request->home_form['form_rating'] ?? 5),
+                    'form_momentum' => (float) ($request->home_form['form_momentum'] ?? 0),
+                    'raw_form' => $request->home_form['raw_form'] ?? [],
+                ]
+            );
         }
 
         if ($request->filled('away_form')) {
-            Team_Form::create([
-                'match_id' => $match->id,
-                'team_id' => $awayTeam->code,
-                'venue' => 'away',
-                'form_string' => $request->away_form['form_string'] ?? '',
-                'matches_played' => (int) ($request->away_form['matches_played'] ?? 0),
-                'wins' => (int) ($request->away_form['wins'] ?? 0),
-                'draws' => (int) ($request->away_form['draws'] ?? 0),
-                'losses' => (int) ($request->away_form['losses'] ?? 0),
-                'avg_goals_scored' => (float) ($request->away_form['avg_goals_scored'] ?? 0),
-                'avg_goals_conceded' => (float) ($request->away_form['avg_goals_conceded'] ?? 0),
-                'form_rating' => (float) ($request->away_form['form_rating'] ?? 5),
-                'form_momentum' => (float) ($request->away_form['form_momentum'] ?? 0),
-                'raw_form' => $request->away_form['raw_form'] ?? [],
-            ]);
+            Team_Form::updateOrCreate(
+                [
+                    'match_id' => $match->id,
+                    'team_id' => $awayTeam->code,
+                    'venue' => 'away',
+                ],
+                [
+                    'form_string' => $request->away_form['form_string'] ?? '',
+                    'matches_played' => (int) ($request->away_form['matches_played'] ?? 0),
+                    'wins' => (int) ($request->away_form['wins'] ?? 0),
+                    'draws' => (int) ($request->away_form['draws'] ?? 0),
+                    'losses' => (int) ($request->away_form['losses'] ?? 0),
+                    'avg_goals_scored' => (float) ($request->away_form['avg_goals_scored'] ?? 0),
+                    'avg_goals_conceded' => (float) ($request->away_form['avg_goals_conceded'] ?? 0),
+                    'form_rating' => (float) ($request->away_form['form_rating'] ?? 5),
+                    'form_momentum' => (float) ($request->home_form['form_momentum'] ?? 0), // Note: typo fix if needed
+                    'raw_form' => $request->away_form['raw_form'] ?? [],
+                ]
+            );
         }
     }
 
@@ -464,23 +484,67 @@ class MatchController extends Controller
         DB::beginTransaction();
 
         try {
-            foreach ($markets as $marketData) {
+                    foreach ($markets as $marketData) {
+                        // Generate base slug
+                        $baseSlug = \Illuminate\Support\Str::slug($marketData['name'] ?? 'unknown');
 
-                // 1. Create or fetch the base market definition
-                $market = Market::firstOrCreate(
+                        // Check if slug exists and make it unique if needed
+                        $slug = $baseSlug;
+                        $counter = 1;
+
+                        while (Market::where('slug', $slug)->exists()) {
+                            $slug = $baseSlug . '-' . $counter;
+                            $counter++;
+                        }
+
+                        // Create or find market
+                        $market = Market::firstOrCreate(
+                            [
+                                'name' => $marketData['name'],
+                                'market_type' => $marketData['market_type'],
+                            ],
+                            [
+                                'slug' => $slug,
+                                'code' => $this->generateMarketCode($marketData['name']),
+                                'description' => ucfirst(str_replace('_', ' ', $marketData['name'] ?? '')),
+                                'is_active' => true,
+                                'sort_order' => $this->getNextSortOrder(),
+                            ]
+                        );
+
+                        // If market already exists but has different slug, update it
+                        if (!$market->wasRecentlyCreated && $market->slug !== $slug) {
+                            // Generate a unique slug for this existing market
+                            $newSlug = $slug;
+                            $counter = 1;
+                            while (Market::where('slug', $newSlug)->where('id', '!=', $market->id)->exists()) {
+                                $newSlug = $slug . '-' . $counter;
+                                $counter++;
+                            }
+                            $market->update(['slug' => $newSlug]);
+                        }
+
+                // OR use firstOrCreate with explicit save
+                $market = Market::firstOrNew(
                     [
                         'name' => $marketData['name'],
                         'market_type' => $marketData['market_type'],
-                    ],
-                    [
-                        'code' => $this->generateMarketCode($marketData['name']),
-                        'description' => ucfirst(str_replace('_', ' ', $marketData['name'])),
-                        'is_active' => true,
-                        'sort_order' => $this->getNextSortOrder(),
                     ]
                 );
 
-                // 2. Attach market to match (match-specific)
+                // If it's a new record or missing slug, set the attributes
+                if ($market->exists === false || empty($market->slug)) {
+                    $market->fill([
+                        'slug' => $slug,
+                        'code' => $this->generateMarketCode($marketData['name']),
+                        'description' => ucfirst(str_replace('_', ' ', $marketData['name'] ?? '')),
+                        'is_active' => true,
+                        'sort_order' => $this->getNextSortOrder(),
+                    ]);
+                    $market->save();
+                }
+
+                // 2. Attach market to match
                 $matchMarket = MatchMarket::updateOrCreate(
                     [
                         'match_id' => $matchId,
@@ -488,7 +552,7 @@ class MatchController extends Controller
                     ],
                     [
                         'odds' => $marketData['odds'] ?? 0,
-                        'market_data' => json_encode([  // ← ADD json_encode here
+                        'market_data' => json_encode([
                             'source' => 'manual',
                             'raw_name' => $marketData['name'],
                         ]),
@@ -496,12 +560,9 @@ class MatchController extends Controller
                     ]
                 );
 
-                // 3. Store outcomes PER MATCH MARKET
+                // 3. Store outcomes
                 if (!empty($marketData['outcomes']) && is_array($marketData['outcomes'])) {
-                    $this->storeMarketOutcomes(
-                        $matchMarket->id,
-                        $marketData['outcomes']
-                    );
+                    $this->storeMarketOutcomes($matchMarket->id, $marketData['outcomes']);
                 }
             }
 
@@ -511,19 +572,17 @@ class MatchController extends Controller
                 'match_id' => $matchId,
                 'markets_count' => count($markets),
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
-
             Log::error('Failed to store markets', [
                 'match_id' => $matchId,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(), // Add full trace for debugging
             ]);
-
             throw $e;
         }
     }
-    
+
     /**
      * Generate a market code from market name
      * 
@@ -534,15 +593,15 @@ class MatchController extends Controller
     {
         // Convert to uppercase, replace spaces with underscores, remove special chars
         $code = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '_', $marketName));
-        
+
         // If code is too long, truncate it
         if (strlen($code) > 50) {
             $code = substr($code, 0, 50);
         }
-        
+
         return $code;
     }
-    
+
     /**
      * Get the next sort order for markets
      * 
@@ -550,8 +609,8 @@ class MatchController extends Controller
      */
     private function getNextSortOrder(): int
     {
-        $lastMarket = Market::orderBy('sort_order', 'desc')->first();
-        return $lastMarket ? $lastMarket->sort_order + 1 : 1;
+        $max = Market::max('sort_order');
+        return $max ? $max + 1 : 1;
     }
 
     /**
@@ -561,25 +620,45 @@ class MatchController extends Controller
      * @param array $outcomes
      * @return void
      */
-private function storeMarketOutcomes(int $matchMarketId, array $outcomes): void
-{
-    foreach ($outcomes as $index => $outcomeData) {
+    private function storeMarketOutcomes(int $matchMarketId, array $outcomes): void
+    {
+        Log::info('Storing outcomes', [
+            'match_market_id' => $matchMarketId,
+            'outcomes_count' => count($outcomes),
+            'first_outcome' => $outcomes[0] ?? null,
+        ]);
 
-        MatchMarketOutcome::updateOrCreate(
-            [
-                'match_market_id' => $matchMarketId,
-                'outcome_key' => $outcomeData['outcome'],
-            ],
-            [
-                'label' => $this->generateOutcomeLabel($outcomeData['outcome']),
-                'odds' => $outcomeData['odds'] ?? 0,
-                'sort_order' => $index + 1,
-                'is_default' => $index === 0,
-            ]
-        );
+        foreach ($outcomes as $index => $outcomeData) {
+            Log::debug('Processing outcome', [
+                'index' => $index,
+                'data' => $outcomeData,
+            ]);
+
+            try {
+                $result = MatchMarketOutcome::updateOrCreate(
+                    [
+                        'match_market_id' => $matchMarketId,
+                        'outcome' => $outcomeData['outcome'], // Try this first
+                    ],
+                    [
+                        'label' => $this->generateOutcomeLabel($outcomeData['outcome']),
+                        'odds' => $outcomeData['odds'] ?? 0,
+                        'sort_order' => $index + 1,
+                        'is_default' => $index === 0,
+                    ]
+                );
+
+                Log::debug('Outcome saved', ['id' => $result->id]);
+
+            } catch (\Exception $e) {
+                Log::error('Failed to save outcome', [
+                    'error' => $e->getMessage(),
+                    'data' => $outcomeData,
+                ]);
+                throw $e;
+            }
+        }
     }
-}
-
 
     /**
      * Generate a human-readable outcome label
@@ -601,29 +680,47 @@ private function storeMarketOutcomes(int $matchMarketId, array $outcomes): void
             'away' => 'Away Win',
             'both_teams_score' => 'Both Teams Score'
         ];
-        
+
         return $labels[$outcomeName] ?? ucfirst(str_replace('_', ' ', $outcomeName));
     }
-    
 
 
-  
+
+
     /**
      * Store head-to-head data from request.
      */
     private function storeHeadToHead(MatchModel $match, $request): void
     {
         if ($request->filled('head_to_head_stats')) {
-            Head_To_Head::create([
-                'match_id' => $match->id,
-                'stats' => $request->head_to_head_stats,
-                'home_wins' => (int) ($request->head_to_head_stats['home_wins'] ?? 0),
-                'away_wins' => (int) ($request->head_to_head_stats['away_wins'] ?? 0),
-                'draws' => (int) ($request->head_to_head_stats['draws'] ?? 0),
-                'total_meetings' => (int) ($request->head_to_head_stats['home_wins'] ?? 0) +
-                    (int) ($request->head_to_head_stats['away_wins'] ?? 0) +
-                    (int) ($request->head_to_head_stats['draws'] ?? 0),
-            ]);
+            $stats = $request->head_to_head_stats;
+
+            // Extract and cast values safely
+            $homeWins = (int) ($stats['home_wins'] ?? 0);
+            $awayWins = (int) ($stats['away_wins'] ?? 0);
+            $draws = (int) ($stats['draws'] ?? 0);
+            $homeGoals = (int) ($stats['home_goals'] ?? 0);
+            $awayGoals = (int) ($stats['away_goals'] ?? 0);  // Fixed typo: 'away_goas' → 'away_goals'
+            $last_meetings = $stats['last_meetings'] ?? [];
+            $totalMeetings = $homeWins + $awayWins + $draws;
+
+            Head_To_Head::updateOrCreate(
+                ['match_id' => $match->id],  // Ensures only one H2H record per match
+                [
+                    'home_id' => $match->home_team_id,           // Team ID (or code if string)
+                    'away_id' => $match->away_team_id,           // Team ID (or code if string)
+                    'home_name' => $match->homeTeam?->name ?? $match->home_team,
+                    'away_name' => $match->awayTeam?->name ?? $match->away_team,
+                    'total_meetings' => $totalMeetings,
+                    'home_wins' => $homeWins,
+                    'away_wins' => $awayWins,
+                    'draws' => $draws,
+                    'home_goals' => $homeGoals,
+                    'away_goals' => $awayGoals,
+                    'stats' => $stats,  // Keep full raw stats for flexibility
+                    'last_meetings' => $last_meetings,
+                ]
+            );
         }
     }
 
@@ -703,7 +800,7 @@ private function storeMarketOutcomes(int $matchMarketId, array $outcomes): void
      */
     private function shouldReprocessForML(MatchModel $match, $request): bool
     {
-        $criticalFields = ['home_team_id', 'away_team_id', 'match_date', 'odds', 'league'];
+        $criticalFields = ['home_id', 'away_id', 'match_date', 'odds', 'league'];
 
         foreach ($criticalFields as $field) {
             if ($request->has($field) && $request->$field != $match->getOriginal($field)) {
@@ -736,8 +833,8 @@ private function storeMarketOutcomes(int $matchMarketId, array $outcomes): void
             $match->analysis_status = 'processing';
             $match->save();
 
-            // Dispatch the heavy job in background
-            ProcessMatchForML::dispatch($match->id, 'full')->onQueue('ml-processing');
+            // // Dispatch the heavy job in background
+            // ProcessMatchForML::dispatch($match->id, 'full')->onQueue('ml-processing');
 
             Log::info('User triggered ML processing', ['match_id' => $id, 'user_id' => 1]);
 
@@ -747,7 +844,6 @@ private function storeMarketOutcomes(int $matchMarketId, array $outcomes): void
                 'match_id' => $match->id,
                 'status' => 'processing',
             ]);
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json([
                 'success' => false,
@@ -768,85 +864,85 @@ private function storeMarketOutcomes(int $matchMarketId, array $outcomes): void
     }
 
     // app/Http/Controllers/Api/MatchController.php (add method)
-public function generatePredictions(string $id): JsonResponse
-{
-    $match = MatchModel::with(['markets', 'teamForms', 'headToHead'])->find($id);
+    public function generatePredictions(string $id): JsonResponse
+    {
+        $match = MatchModel::with(['markets', 'teamForms', 'headToHead'])->find($id);
 
-    if (!$match) {
-        return response()->json(['success' => false, 'message' => 'Match not found'], 404);
-    }
-
-    $masterSlip = MasterSlip::create([
-        'match_id' => $match->id,
-        'stake' => 10.00,
-        'status' => 'completed',
-    ]);
-
-    $markets = $match->markets;
-
-    for ($i = 0; $i < 50; $i++) {
-        $numSelections = rand(2, min(6, $markets->count()));
-        $selectedMarkets = $markets->random($numSelections);
-
-        $totalOdds = 1.0;
-        $selections = [];
-
-        foreach ($selectedMarkets as $market) {
-            $odds = round(rand(120, 450) / 100, 2);
-            $totalOdds *= $odds;
-
-            $selections[] = [
-                'market_id' => $market->id,
-                'odds' => $odds,
-            ];
+        if (!$match) {
+            return response()->json(['success' => false, 'message' => 'Match not found'], 404);
         }
 
-        $potentialReturn = round($totalOdds * $masterSlip->stake, 2);
+        $masterSlip = MasterSlip::create([
+            'match_id' => $match->id,
+            'stake' => 10.00,
+            'status' => 'completed',
+        ]);
 
-        AlternativeSlip::create([
+        $markets = $match->markets;
+
+        for ($i = 0; $i < 50; $i++) {
+            $numSelections = rand(2, min(6, $markets->count()));
+            $selectedMarkets = $markets->random($numSelections);
+
+            $totalOdds = 1.0;
+            $selections = [];
+
+            foreach ($selectedMarkets as $market) {
+                $odds = round(rand(120, 450) / 100, 2);
+                $totalOdds *= $odds;
+
+                $selections[] = [
+                    'market_id' => $market->id,
+                    'odds' => $odds,
+                ];
+            }
+
+            $potentialReturn = round($totalOdds * $masterSlip->stake, 2);
+
+            AlternativeSlip::create([
+                'master_slip_id' => $masterSlip->id,
+                'total_odds' => round($totalOdds, 2),
+                'potential_return' => $potentialReturn,
+                'selections' => $selections,
+            ]);
+        }
+
+        $match->analysis_status = 'completed';
+        $match->save();
+
+        return response()->json([
+            'success' => true,
+            'match_id' => $match->id,
             'master_slip_id' => $masterSlip->id,
-            'total_odds' => round($totalOdds, 2),
-            'potential_return' => $potentialReturn,
-            'selections' => $selections,
+            'slips_created' => 50,
+            'status' => 'completed',
         ]);
     }
 
-    $match->analysis_status = 'completed';
-    $match->save();
-
-    return response()->json([
-        'success' => true,
-        'match_id' => $match->id,
-        'master_slip_id' => $masterSlip->id,
-        'slips_created' => 50,
-        'status' => 'completed',
-    ]);
-}
-
-//Laravel layer can perform several "Orchestrator" tasks:
+    //Laravel layer can perform several "Orchestrator" tasks:
     //SLA Monitoring: If $processTime exceeds a threshold (e.g., 2.0 seconds), Laravel can
     //trigger an alert that the Python engine is struggling or needs more CPU resources
 
     //Database Logging: You can save this processing time in your Laravel match_analysis_logs table
     //This helps you track which types of slips (e.g., slips with 20 matches vs 5 matches) take the most computational effort.
 
- public function generateEngineSlips(Request $request)
-        {
-            $masterSlipData = $request->master_slip;
-            // 1. Send the POST request to the Python Engine
-            $response = Http::post('http://localhost:5000/generate-slips', $masterSlipData);
+    public function generateEngineSlips(Request $request)
+    {
+        $masterSlipData = $request->master_slip;
+        // 1. Send the POST request to the Python Engine
+        $response = Http::post('http://localhost:5000/generate-slips', $masterSlipData);
 
-            if ($response->successful()) {
-                // 2. Retrieve the custom header we defined in Python
-                $processTime = $response->header('X-Process-Time');
+        if ($response->successful()) {
+            // 2. Retrieve the custom header we defined in Python
+            $processTime = $response->header('X-Process-Time');
 
-                // 3. Log it or store it for performance monitoring
-                Log::info("Python Engine processed slip ID {$masterSlipData['master_slip_id']} in {$processTime} seconds.");
+            // 3. Log it or store it for performance monitoring
+            Log::info("Python Engine processed slip ID {$masterSlipData['master_slip_id']} in {$processTime} seconds.");
 
-                // 4. Return the body (the generated slips)
-                return $response->json();
-            }
-
-            throw new \Exception("Engine Error: " . $response->body());
+            // 4. Return the body (the generated slips)
+            return $response->json();
         }
+
+        throw new \Exception("Engine Error: " . $response->body());
+    }
 }

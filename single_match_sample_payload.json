@@ -1,0 +1,267 @@
+{
+  "home_team": "Villarreal",
+  "away_team": "Barcelona",
+  "league": "La Liga",
+  "match_date": "2025-12-21",
+  "match_time": "15:00",
+  "venue": "Home",
+  "referee": "",
+  "weather": "Clear",
+  "status": "scheduled",
+  "home_score": null,
+  "away_score": null,
+  "notes": "",
+  "home_form": {
+    "raw_form": [
+      {
+        "opponent": "Racing Santander",
+        "result": "2-1",
+        "outcome": "L"
+      },
+      {
+        "opponent": "FC Copenhagen",
+        "result": "2-3",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Getafe",
+        "result": "2-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Antoniano",
+        "result": "1-2",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Real Sociedad",
+        "result": "2-3",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Dortmund",
+        "result": "4-0",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Mallorca",
+        "result": "2-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Espanyol",
+        "result": "0-2",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Pafos",
+        "result": "1-0",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Rayo Vallecano",
+        "result": "4-0",
+        "outcome": "W"
+      }
+    ],
+    "matches_played": 10,
+    "wins": 6,
+    "draws": 0,
+    "losses": 4,
+    "goals_scored": 20,
+    "goals_conceded": 12,
+    "avg_goals_scored": 2,
+    "avg_goals_conceded": 1.2,
+    "clean_sheets": 4,
+    "failed_to_score": 1,
+    "form_string": "LLWWWLWWLW",
+    "form_rating": 6,
+    "form_momentum": -3
+  },
+  "away_form": {
+    "raw_form": [
+      {
+        "opponent": "Guadalajara",
+        "result": "0-2",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Osasuna",
+        "result": "2-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Eintracht Frankfurt",
+        "result": "2-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Betis",
+        "result": "3-5",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Atl Madrid",
+        "result": "3-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Alaves",
+        "result": "3-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Chelsea",
+        "result": "0-3",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Ath Bilbao",
+        "result": "4-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Celta Vigo",
+        "result": "2-4",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Club Brugge KV",
+        "result": "3-3",
+        "outcome": "D"
+      }
+    ],
+    "matches_played": 10,
+    "wins": 8,
+    "draws": 1,
+    "losses": 1,
+    "goals_scored": 22,
+    "goals_conceded": 20,
+    "avg_goals_scored": 2.2,
+    "avg_goals_conceded": 2,
+    "clean_sheets": 2,
+    "failed_to_score": 2,
+    "form_string": "WWWWWWLWWD",
+    "form_rating": 8.3,
+    "form_momentum": 0
+  },
+  "head_to_head_stats": {
+    "home_wins": 0,
+    "away_wins": 5,
+    "draws": 0,
+    "total_meetings": 5,
+    "last_meetings": [
+      {
+        "date": "2025-05-10",
+        "home_team": "Barcelona",
+        "away_team": "Villarreal",
+        "score": "2-3",
+        "result": "A"
+      },
+      {
+        "date": "2024-09-22",
+        "home_team": "Villarreal",
+        "away_team": "Barcelona",
+        "score": "1-5",
+        "result": "A"
+      },
+      {
+        "date": "2024-01-27",
+        "home_team": "Barcelona",
+        "away_team": "Villarreal",
+        "score": "3-5",
+        "result": "A"
+      },
+      {
+        "date": "2023-10-27",
+        "home_team": "Villarreal",
+        "away_team": "Barcelona",
+        "score": "3-4",
+        "result": "A"
+      },
+      {
+        "date": "2023-02-12",
+        "home_team": "Villarreal",
+        "away_team": "Barcelona",
+        "score": "0-1",
+        "result": "A"
+      }
+    ]
+  },
+  "markets": [
+    {
+      "name": "match_result",
+      "odds": 0,
+      "market_type": "match_result",
+      "outcomes": [
+        {
+          "outcome": "1",
+          "odds": 0
+        },
+        {
+          "outcome": "X",
+          "odds": 0
+        },
+        {
+          "outcome": "2",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "correct_score",
+      "odds": 0,
+      "market_type": "correct_score",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "asian_handicap",
+      "odds": 0,
+      "market_type": "asian_handicap",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "both_teams_score",
+      "odds": 0,
+      "market_type": "both_teams_score",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "over/under",
+      "odds": 0,
+      "market_type": "over_under",
+      "outcomes": [
+        {
+          "outcome": "Over 2.5",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "halftime",
+      "odds": 0,
+      "market_type": "halftime",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+2025-12-19 23:17:47,835 [INFO] engine_logger: --- Starting Generation for Master Slip: MSL-20240515-001 ---
+2025-12-19 23:17:47,835 [ERROR] engine_logger: Generation Failed for MSL-20240515-001 | Error: 'MatchData' object has no attribute 'markets'
+Traceback (most recent call last):
+  File "C:\Users\Kobayashi\Desktop\freedomTrain\github\game_engine\app.py", line 61, in generate_slips
+    results = builder.generate(payload)
+  File "C:\Users\Kobayashi\Desktop\freedomTrain\github\game_engine\engine\slip_builder.py", line 95, in generate
+    "confidence_score": self.scoring.calculate_confidence_score(match_sims)
+  File "C:\Users\Kobayashi\Desktop\freedomTrain\github\game_engine\engine\scoring.py", line 43, in calculate_confidence_score
+    market_implied = 1 / m['match'].markets[0].odds
+  File "C:\Users\Kobayashi\AppData\Local\Programs\Python\Python310\lib\site-packages\pydantic\main.py", line 1026, in __getattr__
+    raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+AttributeError: 'MatchData' object has no attribute 'markets'
+2025-12-19 23:17:47,851 [INFO] engine_logger: POST /generate-slips | Status: 500 | Time: 0.0312s
+2025-12-19 23:22:22,249 [INFO] engine_logger: --- Starting Generation for Master Slip: MSL-20240515-001 ---
+2025-12-19 23:22:22,265 [INFO] engine_logger: Successfully generated 100 slips for MSL-20240515-001
+2025-12-19 23:22:22,280 [INFO] engine_logger: POST /generate-slips | Status: 200 | Time: 0.0313s
+2025-12-20 01:43:43,338 [INFO] engine_logger: POST /generate=slipsjj | Status: 404 | Time: 0.6544s
+2025-12-20 01:50:21,311 [INFO] engine_logger: POST /generate=slips | Status: 404 | Time: 0.0216s
+2025-12-20 01:59:17,295 [INFO] engine_logger: --- Starting Generation for Master Slip: MSL-20240515-001 ---
+2025-12-20 01:59:17,347 [INFO] engine_logger: Successfully generated 100 slips for MSL-20240515-001
+2025-12-20 01:59:17,392 [INFO] engine_logger: POST /generate-slips | Status: 200 | Time: 0.1268s

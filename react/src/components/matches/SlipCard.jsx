@@ -23,7 +23,7 @@ import {
   Visibility,
   TrendingUp,
   AttachMoney,
-  Risk,
+  Warning, // Replaced 'Risk' with 'Warning' (valid icon)
   Info,
   Sports,
   ExpandMore,
@@ -95,7 +95,7 @@ const SlipCard = ({ slip, onDelete, onViewDetail }) => {
                   size="small"
                 />
                 <Chip
-                  icon={<Risk />}
+                  icon={<Warning />}
                   label={slip.risk_level}
                   color={getRiskColor(slip.risk_level)}
                   size="small"

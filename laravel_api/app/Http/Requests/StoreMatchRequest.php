@@ -53,7 +53,7 @@ class StoreMatchRequest extends FormRequest
 
             // 'odds' => 'nullable|array',
 
-            'weather_conditions' => 'nullable|string|max:255',
+            'weather' => 'nullable|string|max:255',
             'referee' => 'nullable|string|max:255',
             'importance' => 'nullable|string|max:50',
             'tv_coverage' => 'nullable|string|max:255',

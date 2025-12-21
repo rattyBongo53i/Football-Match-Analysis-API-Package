@@ -13,15 +13,15 @@ return new class extends Migration
     {
         Schema::table('matches', function (Blueprint $table) {
             //
-                $table->enum('analysis_status', ['pending', 'processing', 'completed', 'failed'])->default('pending')->index();
-                $table->timestamp('analysis_started_at')->nullable();
-                $table->enum('status', ['scheduled', 'ongoing', 'completed', 'cancelled'])->default('scheduled');
-                $table->json('home_form')->nullable(); // JSON column for form data
-                $table->json('away_form')->nullable(); // JSON column for form data
-                $table->json('head_to_head')->nullable(); // JSON column for H2H data
-                $table->text('notes')->nullable();
-                $table->timestamp('analysis_completed_at')->nullable();
-                 $table->string('venue')->nullable();
+              //  $table->enum('analysis_status', ['pending', 'processing', 'completed', 'failed'])->default('pending')->index();
+             //   $table->timestamp('analysis_started_at')->nullable();
+              //  $table->enum('status', ['scheduled', 'ongoing', 'completed', 'cancelled'])->default('scheduled');
+            //     $table->json('home_form')->nullable(); // JSON column for form data
+            //     $table->json('away_form')->nullable(); // JSON column for form data
+            //     $table->json('head_to_head')->nullable(); // JSON column for H2H data
+            //  //   $table->text('notes')->nullable();
+            //     $table->timestamp('analysis_completed_at')->nullable();
+            //      $table->string('venue')->nullable();
                 $table->timestamp('analysis_failed_at')->nullable();
                 $table->text('analysis_error')->nullable();
 

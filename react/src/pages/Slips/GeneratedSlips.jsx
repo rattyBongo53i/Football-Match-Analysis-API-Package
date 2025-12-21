@@ -37,7 +37,7 @@ import {
   BarChart,
   ViewList,
   AttachMoney,
-  Risk,
+  Warning, // Replaced 'Risk' with 'Warning' (valid icon)
   Sports,
 } from "@mui/icons-material";
 
@@ -218,12 +218,11 @@ const GeneratedSlips = () => {
       // await slipService.deleteSlip(slipId);
 
       // For now, just remove from state
-      setSlips((prev) => prev.filter((slip) => slip.slip_id !== slipId));
+      const newSlips = slips.filter((slip) => slip.slip_id !== slipId);
+      setSlips(newSlips);
 
-      // Refresh statistics
-      const stats = calculateStatistics(
-        filteredSlips.filter((slip) => slip.slip_id !== slipId)
-      );
+      // Refresh statistics based on new slips
+      const stats = calculateStatistics(newSlips);
       setStatistics(stats);
     } catch (err) {
       setError("Failed to delete slip");
@@ -414,11 +413,14 @@ const GeneratedSlips = () => {
                   value={sortBy}
                   label="Sort By"
                   onChange={(e) => setSortBy(e.target.value)}
-                  startAdornment={
-                    <InputAdornment position="start">
-                      <Sort fontSize="small" />
-                    </InputAdornment>
-                  }
+                  InputProps={{
+                    // Fixed: Moved startAdornment inside InputProps
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Sort fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
                 >
                   <MenuItem value="confidence">Confidence</MenuItem>
                   <MenuItem value="odds">Total Odds</MenuItem>
@@ -545,10 +547,8 @@ const GeneratedSlips = () => {
                   <Stack spacing={2}>
                     {Object.entries(statistics.riskDistribution).map(
                       ([risk, count]) => {
-                        const percentage = (
-                          (count / statistics.totalSlips) *
-                          100
-                        ).toFixed(1);
+                        const percentageNum =
+                          (count / statistics.totalSlips) * 100; // Fixed: Use number for value
                         return (
                           <Box key={risk}>
                             <Box
@@ -558,12 +558,12 @@ const GeneratedSlips = () => {
                             >
                               <Typography variant="body2">{risk}</Typography>
                               <Typography variant="body2" fontWeight="medium">
-                                {count} ({percentage}%)
+                                {count} ({percentageNum.toFixed(1)}%)
                               </Typography>
                             </Box>
                             <LinearProgress
                               variant="determinate"
-                              value={percentage}
+                              value={percentageNum}
                               sx={{
                                 height: 8,
                                 borderRadius: 4,
@@ -610,7 +610,7 @@ const GeneratedSlips = () => {
                   <Button
                     fullWidth
                     variant="outlined"
-                    startIcon={<Risk />}
+                    startIcon={<Warning />} // Replaced 'Risk' with 'Warning'
                     onClick={() => setFilterRisk("low")}
                   >
                     Show Low Risk Only
@@ -636,7 +636,7 @@ const GeneratedSlips = () => {
 
 export default GeneratedSlips;
 
-{/* Key Features Implemented:
+/* Key Features Implemented:
 Comprehensive Display:
 
 Cards view with expandable details
@@ -690,4 +690,4 @@ Dynamic statistics calculation
 Live filtering and sorting
 
 The page matches your existing theme and provides a professional, data-rich interface 
-for viewing and managing generated slips from your Python engine */}
+for viewing and managing generated slips from your Python engine */

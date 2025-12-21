@@ -19,6 +19,7 @@ class MatchMarketOutcome extends Model
         'odds',
         'is_default',
         'sort_order',
+        'outcome',
     ];
 
     protected $casts = [

@@ -1,10 +1,7 @@
-import React, { useCallback, useEffect, memo } from "react";
-import { Typography, Box, Grid, CardContent, IconButton } from "@mui/material";
-import { Delete as DeleteIcon } from "@mui/icons-material";
-import {MemoizedTextField} from "./MemoizedComponents";
-import { MemoizedIconButton } from "./MemoizedComponents";
-import { MarketCard } from "./styledComponents";
+import React, { useState,  useEffect, useCallback, useMemo, memo } from 'react';
 
+
+// Separate MarketItem component to fix hook issue
 const MarketItem = memo(
   ({
     market,
@@ -32,6 +29,7 @@ const MarketItem = memo(
           market.outcomes &&
           market.outcomes[outcomeIndex]
         ) {
+          // Update specific outcome odds
           const updatedOutcomes = [...market.outcomes];
           updatedOutcomes[outcomeIndex] = {
             ...updatedOutcomes[outcomeIndex],
@@ -41,6 +39,7 @@ const MarketItem = memo(
         } else if (field === "odds") {
           updated.odds = parseFloat(value) || 0;
         } else if (field.startsWith("outcome_")) {
+          // Handle outcomes for markets like Both Teams to Score
           const outcomeField = field.replace("outcome_", "");
           if (!updated.outcomes) updated.outcomes = [];
           const existingIndex = updated.outcomes.findIndex(
@@ -66,6 +65,7 @@ const MarketItem = memo(
       [market, index, onMarketChange]
     );
 
+    // Get default outcomes based on market type
     const getDefaultOutcomes = () => {
       switch (market.name) {
         case "Correct Score":
@@ -133,6 +133,7 @@ const MarketItem = memo(
       }
     };
 
+    // Initialize outcomes if not present
     useEffect(() => {
       if (
         (isCorrectScore ||
@@ -149,6 +150,7 @@ const MarketItem = memo(
       }
     }, [market.name, index, onMarketChange]);
 
+    // Render correct score inputs
     const renderCorrectScore = () => (
       <Grid container spacing={2}>
         {(market.outcomes || getDefaultOutcomes()).map((outcome, idx) => (
@@ -168,6 +170,7 @@ const MarketItem = memo(
       </Grid>
     );
 
+    // Render asian handicap inputs
     const renderAsianHandicap = () => (
       <Grid container spacing={2}>
         {(market.outcomes || getDefaultOutcomes()).map((outcome, idx) => (
@@ -187,6 +190,7 @@ const MarketItem = memo(
       </Grid>
     );
 
+    // Render both teams to score inputs
     const renderBothTeamsScore = () => (
       <Grid container spacing={2}>
         <Grid item xs={6}>
@@ -218,6 +222,7 @@ const MarketItem = memo(
       </Grid>
     );
 
+    // Render over/under inputs
     const renderOverUnder = () => (
       <Grid container spacing={2}>
         {(market.outcomes || getDefaultOutcomes()).map((outcome, idx) => (
@@ -237,6 +242,7 @@ const MarketItem = memo(
       </Grid>
     );
 
+    // Render halftime inputs
     const renderHalftime = () => (
       <Grid container spacing={2}>
         <Grid item xs={4}>
@@ -284,6 +290,7 @@ const MarketItem = memo(
       </Grid>
     );
 
+    // Render corners inputs
     const renderCorners = () => (
       <Grid container spacing={2}>
         {(market.outcomes || getDefaultOutcomes()).map((outcome, idx) => (
@@ -303,6 +310,7 @@ const MarketItem = memo(
       </Grid>
     );
 
+    // Render player markets inputs
     const renderPlayerMarkets = () => (
       <Grid container spacing={2}>
         {(market.outcomes || getDefaultOutcomes()).map((outcome, idx) => (
@@ -363,7 +371,7 @@ const MarketItem = memo(
 
     return (
       <Grid item xs={12}>
-        <MarketCard variant="outlined">
+        <MemoizedCard variant="outlined">
           <CardContent>
             <Box
               display="flex"
@@ -385,6 +393,7 @@ const MarketItem = memo(
               )}
             </Box>
 
+            {/* Render appropriate market type */}
             {is1X2Market ? (
               <Grid container spacing={2}>
                 <Grid item xs={4}>
@@ -463,11 +472,10 @@ const MarketItem = memo(
               />
             )}
           </CardContent>
-        </MarketCard>
+        </MemoizedCard>
       </Grid>
     );
   }
 );
 
 MarketItem.displayName = "MarketItem";
-export default MarketItem;

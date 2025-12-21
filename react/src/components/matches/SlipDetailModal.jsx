@@ -24,7 +24,7 @@ import {
 import {
   TrendingUp,
   AttachMoney,
-  Risk,
+  Warning,
   Sports,
   Close,
   Info,

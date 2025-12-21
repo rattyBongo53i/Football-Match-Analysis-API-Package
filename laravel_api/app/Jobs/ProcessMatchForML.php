@@ -413,7 +413,7 @@ $isCurrentHomeAsHome ? $homeWins++ : $awayWins++;
 
         $this->processFormAnalysis($match);
         $this->processHeadToHead($match);
-        $this->processPrediction($match, $predictionService);
+        // $this->processPrediction($match, $predictionService);
 
         $match->analysis_status = 'completed';
         $match->analysis_completed_at = Carbon::now();

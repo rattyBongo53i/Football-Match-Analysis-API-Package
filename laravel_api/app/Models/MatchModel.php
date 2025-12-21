@@ -47,6 +47,10 @@ class MatchModel extends Model
 
         // Status & timestamps
         'analysis_status',
+        'analysis_started_at',
+        'analysis_completed_at',
+        'analysis_failed_at',
+        'analysis_error',
     ];
 
     protected $casts = [

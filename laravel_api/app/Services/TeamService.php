@@ -18,7 +18,7 @@ class TeamService
             $team = Team::create([
                 'name' => trim($name),
                 'code' => $this->generateTeamCode($name),
-                'slug' => Str::slug($name),
+                // 'slug' => Str::slug($name),
                 'country' => $this->extractCountryFromLeague($league),
                 'overall_rating' => 5.0,
                 'attack_rating' => 5.0,

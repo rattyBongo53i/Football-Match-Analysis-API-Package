@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+  import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
 const slipService = {
   // Get generated slips for a master slip

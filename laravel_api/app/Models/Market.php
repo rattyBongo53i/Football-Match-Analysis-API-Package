@@ -20,6 +20,7 @@ class Market extends Model
         'max_odds',
         'sort_order',
         'odds',
+        'slug',
     ];
 
     protected $casts = [
