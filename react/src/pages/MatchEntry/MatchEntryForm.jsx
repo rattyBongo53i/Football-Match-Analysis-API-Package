@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  memo,
+  useRef,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -66,35 +73,38 @@ import {
   prepareMarketsForBackend,
 } from "./matchEntryUtils";
 
+// Memoized constants to prevent recreation
+const INITIAL_MARKETS = [
+  {
+    id: 1,
+    name: "1X2",
+    required: true,
+    home_odds: "",
+    draw_odds: "",
+    away_odds: "",
+  },
+  { id: 2, name: "Correct Score", required: false, outcomes: [] },
+  { id: 3, name: "Asian Handicap", required: false, outcomes: [] },
+  { id: 4, name: "Both Teams to Score", required: false, outcomes: [] },
+  { id: 5, name: "Over/Under", required: false, outcomes: [] },
+  { id: 6, name: "Halftime", required: false, outcomes: [] },
+  { id: 7, name: "Corners", required: false, outcomes: [] },
+  { id: 8, name: "Player Markets", required: false, outcomes: [] },
+  { id: 9, name: "Double Chance", required: false, odds: "" },
+  { id: 10, name: "Draw No Bet", required: false, odds: "" },
+  { id: 11, name: "Half Time/Full Time", required: false, odds: "" },
+  { id: 12, name: "Total Goals", required: false, odds: "" },
+];
+
 const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
   const marketHandler = useMemo(() => createMarketFormHandler(), []);
   const { addMatchToBetslip } = useBetslip();
   const navigate = useNavigate();
 
-  // State (Identical to original)
+  // State (Identical to original but with initial optimizations)
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
-  const [markets, setMarkets] = useState([
-    {
-      id: 1,
-      name: "1X2",
-      required: true,
-      home_odds: "",
-      draw_odds: "",
-      away_odds: "",
-    },
-    { id: 2, name: "Correct Score", required: false, outcomes: [] },
-    { id: 3, name: "Asian Handicap", required: false, outcomes: [] },
-    { id: 4, name: "Both Teams to Score", required: false, outcomes: [] },
-    { id: 5, name: "Over/Under", required: false, outcomes: [] },
-    { id: 6, name: "Halftime", required: false, outcomes: [] },
-    { id: 7, name: "Corners", required: false, outcomes: [] },
-    { id: 8, name: "Player Markets", required: false, outcomes: [] },
-    { id: 9, name: "Double Chance", required: false, odds: "" },
-    { id: 10, name: "Draw No Bet", required: false, odds: "" },
-    { id: 11, name: "Half Time/Full Time", required: false, odds: "" },
-    { id: 12, name: "Total Goals", required: false, odds: "" },
-  ]);
+  const [markets, setMarkets] = useState(INITIAL_MARKETS);
   const [marketErrors, setMarketErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [homeFormMatches, setHomeFormMatches] = useState([]);
@@ -108,27 +118,59 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
     severity: "success",
   });
 
-  const showSnackbar = (message, severity = "success") =>
-    setSnackbar({ open: true, message, severity });
-  const closeSnackbar = () => setSnackbar((s) => ({ ...s, open: false }));
+  // Use refs for values that don't need re-renders
+  const savedMatchIdRef = useRef(savedMatchId);
+  const matchIdRef = useRef(matchId);
 
-  // Handlers (Business logic preserved)
+  // Update refs when values change
+  useEffect(() => {
+    savedMatchIdRef.current = savedMatchId;
+  }, [savedMatchId]);
+
+  useEffect(() => {
+    matchIdRef.current = matchId;
+  }, [matchId]);
+
+  const showSnackbar = useCallback(
+    (message, severity = "success") =>
+      setSnackbar({ open: true, message, severity }),
+    []
+  );
+
+  const closeSnackbar = useCallback(
+    () => setSnackbar((s) => ({ ...s, open: false })),
+    []
+  );
+
+  // Memoize the initial data effect
   useEffect(() => {
     if (!initialData) return;
+
     setFormData(initialData);
-    if (initialData.markets) setMarkets(initialData.markets);
-    if (initialData.home_form?.raw_form)
+
+    if (initialData.markets) {
+      setMarkets(initialData.markets);
+    }
+
+    if (initialData.home_form?.raw_form) {
       setHomeFormMatches(initialData.home_form.raw_form);
-    if (initialData.away_form?.raw_form)
+    }
+
+    if (initialData.away_form?.raw_form) {
       setAwayFormMatches(initialData.away_form.raw_form);
-    if (initialData.head_to_head_stats?.last_meetings)
+    }
+
+    if (initialData.head_to_head_stats?.last_meetings) {
       setHeadToHeadMatches(initialData.head_to_head_stats.last_meetings);
+    }
   }, [initialData]);
 
+  // Optimize input change handler
   const handleInputChange = useCallback((field, value) => {
-    setFormData((p) => ({ ...p, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
+  // Optimize market change handlers
   const handleMarketChange = useCallback((index, updatedMarket) => {
     setMarkets((prev) => {
       const updated = [...prev];
@@ -154,563 +196,584 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
     ]);
   }, []);
 
-  const validateMarkets = () => {
+  // Memoize validation function
+  const validateMarkets = useCallback(() => {
     const errors = {};
     const oneXTwoMarket = markets.find((m) => m.name === "1X2");
+
     if (oneXTwoMarket) {
-      if (
-        !oneXTwoMarket.home_odds ||
-        parseFloat(oneXTwoMarket.home_odds) < 1.01
-      )
+      const homeOdds = parseFloat(oneXTwoMarket.home_odds);
+      const drawOdds = parseFloat(oneXTwoMarket.draw_odds);
+      const awayOdds = parseFloat(oneXTwoMarket.away_odds);
+
+      if (!oneXTwoMarket.home_odds || homeOdds < 1.01)
         errors.home_odds = "Invalid";
-      if (
-        !oneXTwoMarket.draw_odds ||
-        parseFloat(oneXTwoMarket.draw_odds) < 1.01
-      )
+      if (!oneXTwoMarket.draw_odds || drawOdds < 1.01)
         errors.draw_odds = "Invalid";
-      if (
-        !oneXTwoMarket.away_odds ||
-        parseFloat(oneXTwoMarket.away_odds) < 1.01
-      )
+      if (!oneXTwoMarket.away_odds || awayOdds < 1.01)
         errors.away_odds = "Invalid";
     }
+
     setMarketErrors(errors);
     return Object.keys(errors).length === 0;
-  };
+  }, [markets]);
 
-  const handleSubmit = async (e) => {
-    e?.preventDefault();
-    if (!validateMarkets()) {
-      showSnackbar("Please fix market errors", "error");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const matchData = {
-        ...formData,
-        home_form: normalizeTeamFormForBackend(homeFormMatches),
-        away_form: normalizeTeamFormForBackend(awayFormMatches),
-        head_to_head_stats: normalizeHeadToHead(headToHeadMatches),
-        markets: prepareMarketsForBackend(
-          markets,
-          marketHandler,
-          getMarketType
-        ),
-      };
-      const saved = matchId
-        ? await matchService.updateMatch(matchId, matchData)
-        : await matchService.createMatch(matchData);
-      setSavedMatchId(saved.id || saved.data?.id);
-      showSnackbar(matchId ? "Match updated" : "Match saved");
-      return saved;
-    } catch (err) {
-      showSnackbar("Failed to save match", "error");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // Memoize form submission handler
+  const handleSubmit = useCallback(
+    async (e) => {
+      e?.preventDefault();
 
-  const handleGenerateSlips = async (mId) => {
-    setIsGenerating(true);
-    try {
-      const response = await matchService.generatePredictions(mId);
-      if (response.success) {
-        showSnackbar("Neural engine engaged! Analyzing match...", "success");
-        navigate(`/matches/${mId}/results`);
-      } else {
-        throw new Error(response.message || "Analysis failed");
+      if (!validateMarkets()) {
+        showSnackbar("Please fix market errors", "error");
+        return;
       }
-    } catch (error) {
-      showSnackbar(error.message, "error");
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
-  const renderStepContent = (step) => {
-    switch (step) {
-      case 0: // Match Details - Redesigned for visual clarity
-        return (
-          <Fade in timeout={500}>
-            <Grid container spacing={4}>
-              {/* Matchup Banner */}
-              <Grid item xs={12}>
-                <Box
-                  sx={{
-                    p: 3,
-                    borderRadius: 4,
-                    background: "rgba(156, 39, 176, 0.05)",
-                    border: "1px solid rgba(156, 39, 176, 0.1)",
-                    textAlign: "center",
-                  }}
-                >
-                  <Grid
-                    container
-                    alignItems="center"
-                    justifyContent="center"
-                    spacing={2}
-                  >
-                    <Grid item xs={5}>
-                      <MemoizedTextField
-                        fullWidth
-                        variant="standard"
-                        placeholder="Home Team Name"
-                        value={formData.home_team}
-                        onChange={(e) =>
-                          handleInputChange("home_team", e.target.value)
-                        }
-                        inputProps={{
-                          style: {
-                            textAlign: "center",
-                            fontSize: "1.5rem",
-                            fontWeight: "bold",
-                          },
-                        }}
-                      />
-                    </Grid>
-                    <Grid item xs={2}>
-                      <Typography
-                        variant="h4"
-                        color="primary.main"
-                        fontWeight="900"
-                      >
-                        VS
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={5}>
-                      <MemoizedTextField
-                        fullWidth
-                        variant="standard"
-                        placeholder="Away Team Name"
-                        value={formData.away_team}
-                        onChange={(e) =>
-                          handleInputChange("away_team", e.target.value)
-                        }
-                        inputProps={{
-                          style: {
-                            textAlign: "center",
-                            fontSize: "1.5rem",
-                            fontWeight: "bold",
-                          },
-                        }}
-                      />
-                    </Grid>
-                  </Grid>
-                </Box>
-              </Grid>
+      setSubmitting(true);
+      try {
+        const matchData = {
+          ...formData,
+          home_form: normalizeTeamFormForBackend(homeFormMatches),
+          away_form: normalizeTeamFormForBackend(awayFormMatches),
+          head_to_head_stats: normalizeHeadToHead(headToHeadMatches),
+          markets: prepareMarketsForBackend(
+            markets,
+            marketHandler,
+            getMarketType
+          ),
+        };
 
-              {/* Detail Fields */}
-              <Grid item xs={12} md={6}>
-                <MemoizedTextField
-                  select
-                  label="League"
-                  value={formData.league}
-                  onChange={(e) => handleInputChange("league", e.target.value)}
-                  fullWidth
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <LeagueIcon color="primary" />
-                      </InputAdornment>
-                    ),
-                  }}
-                  SelectProps={{ native: true }}
-                >
-                  <option value=""></option>
-                  {leagueOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </MemoizedTextField>
-              </Grid>
+        const saved = matchIdRef.current
+          ? await matchService.updateMatch(matchIdRef.current, matchData)
+          : await matchService.createMatch(matchData);
 
-              <Grid item xs={12} md={3}>
-                <MemoizedTextField
-                  fullWidth
-                  label="Match Date"
-                  type="date"
-                  value={formData.match_date}
-                  onChange={(e) =>
-                    handleInputChange("match_date", e.target.value)
-                  }
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <EventNoteIcon color="primary" />
-                      </InputAdornment>
-                    ),
-                  }}
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
+        const newSavedMatchId = saved.id || saved.data?.id;
+        setSavedMatchId(newSavedMatchId);
+        showSnackbar(matchIdRef.current ? "Match updated" : "Match saved");
 
-              <Grid item xs={12} md={3}>
-                <MemoizedTextField
-                  fullWidth
-                  label="Match Time"
-                  type="time"
-                  value={formData.match_time}
-                  onChange={(e) =>
-                    handleInputChange("match_time", e.target.value)
-                  }
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
+        if (onSuccess) {
+          onSuccess(saved);
+        }
 
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Weather Condition</InputLabel>
-                  <MemoizedSelect
-                    value={formData.weather}
-                    onChange={(e) =>
-                      handleInputChange("weather", e.target.value)
-                    }
-                    label="Weather Condition"
-                  >
-                    {WEATHER_OPTIONS.map((opt) => (
-                      <MemoizedMenuItem key={opt} value={opt}>
-                        {opt}
-                      </MemoizedMenuItem>
-                    ))}
-                  </MemoizedSelect>
-                </FormControl>
-              </Grid>
+        return saved;
+      } catch (err) {
+        console.error("Submission error:", err);
+        showSnackbar("Failed to save match", "error");
+        throw err;
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [
+      formData,
+      homeFormMatches,
+      awayFormMatches,
+      headToHeadMatches,
+      markets,
+      marketHandler,
+      validateMarkets,
+      showSnackbar,
+      onSuccess,
+    ]
+  );
 
-              <Grid item xs={12} md={4}>
-                <MemoizedTextField
-                  fullWidth
-                  label="Referee"
-                  value={formData.referee}
-                  onChange={(e) => handleInputChange("referee", e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                <MemoizedTextField
-                  select
-                  label="Venue"
-                  value={formData.venue}
-                  onChange={(e) => handleInputChange("venue", e.target.value)}
-                  fullWidth
-                  SelectProps={{ native: true }}
-                >
-                  <option value=""></option>
-                  {venueOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </MemoizedTextField>
-              </Grid>
-            </Grid>
-          </Fade>
+  // Memoize generate slips handler
+  const handleGenerateSlips = useCallback(
+    async (mId) => {
+      setIsGenerating(true);
+      try {
+        const response = await matchService.generatePredictions(
+          mId || savedMatchIdRef.current
         );
+        if (response.success) {
+          showSnackbar("Neural engine engaged! Analyzing match...", "success");
+          navigate(`/matches/${mId || savedMatchIdRef.current}/results`);
+        } else {
+          throw new Error(response.message || "Analysis failed");
+        }
+      } catch (error) {
+        console.error("Generate slips error:", error);
+        showSnackbar(error.message, "error");
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [navigate, showSnackbar]
+  );
 
-      case 1: // Team Forms - Improved spacing
-        return (
-          <Fade in timeout={500}>
-            <Box>
-              <Box
-                sx={{
-                  mb: 4,
-                  p: 2,
-                  borderRadius: 2,
-                  bgcolor: "background.default",
-                }}
-              >
-                <Last10Form
-                  teamName={formData.home_team || "Home Team"}
-                  value={homeFormMatches}
-                  onChange={setHomeFormMatches}
-                />
-              </Box>
-              <Box
-                sx={{ p: 2, borderRadius: 2, bgcolor: "background.default" }}
-              >
-                <Last10Form
-                  teamName={formData.away_team || "Away Team"}
-                  value={awayFormMatches}
-                  onChange={setAwayFormMatches}
-                />
-              </Box>
-            </Box>
-          </Fade>
-        );
-
-      case 2: // Head-to-Head - Business logic preserved
-        return (
-          <Fade in timeout={500}>
-            <HeadToHeadInput
-              matches={headToHeadMatches}
-              onChange={setHeadToHeadMatches}
-              disabled={submitting}
-            />
-          </Fade>
-        );
-
-      case 3: // Markets - Enhanced list style
-        return (
-          <Fade in timeout={500}>
-            <Box>
-              <Box
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-                mb={4}
-              >
-                <Typography variant="h5" fontWeight="bold">
-                  Market Selection
-                </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={addMarket}
-                  sx={{ borderRadius: 8 }}
-                >
-                  Custom Market
-                </Button>
-              </Box>
-              <Grid container spacing={2}>
-                {markets.map((market, index) => (
-                  <MarketItem
-                    key={market.id}
-                    market={market}
-                    index={index}
-                    marketErrors={marketErrors}
-                    submitting={submitting}
-                    onRemoveMarket={removeMarket}
-                    onMarketChange={handleMarketChange}
-                  />
-                ))}
-              </Grid>
-            </Box>
-          </Fade>
-        );
-
-      case 4: // Review - Modern summary view
-        return (
-          <Fade in timeout={500}>
-            <Box>
-              <Box sx={{ display: "flex", gap: 2, mb: 4 }}>
-                <Chip
-                  label={formData.league}
-                  color="primary"
-                  variant="outlined"
-                />
-                <Chip
-                  label={`${formData.match_date} @ ${formData.match_time}`}
-                  icon={<EventNoteIcon />}
-                />
-                <Chip label={formData.weather} variant="secondary" />
-              </Box>
-
+  // Memoize step content rendering
+  const renderStepContent = useCallback(
+    (step) => {
+      switch (step) {
+        case 0: // Match Details
+          return (
+            <Fade in timeout={300} mountOnEnter unmountOnExit>
               <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <StyledPaper
-                    sx={{ p: 3, border: "1px solid rgba(255,255,255,0.1)" }}
+                <Grid item xs={12}>
+                  <Box
+                    sx={{
+                      p: 3,
+                      borderRadius: 3,
+                      background: "rgba(156, 39, 176, 0.05)",
+                      border: "1px solid rgba(156, 39, 176, 0.1)",
+                    }}
                   >
-                    <Typography variant="overline" color="primary">
-                      Data Density
-                    </Typography>
-                    <Box sx={{ mt: 1 }}>
-                      <Typography variant="body1">
+                    <Grid container alignItems="center" spacing={2}>
+                      <Grid item xs={5}>
+                        <MemoizedTextField
+                          fullWidth
+                          variant="standard"
+                          placeholder="Home Team Name"
+                          value={formData.home_team}
+                          onChange={(e) =>
+                            handleInputChange("home_team", e.target.value)
+                          }
+                          inputProps={{
+                            style: {
+                              textAlign: "center",
+                              fontSize: "1.3rem",
+                              fontWeight: 600,
+                            },
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={2} sx={{ textAlign: "center" }}>
+                        <Typography
+                          variant="h5"
+                          color="primary.main"
+                          fontWeight="800"
+                        >
+                          VS
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={5}>
+                        <MemoizedTextField
+                          fullWidth
+                          variant="standard"
+                          placeholder="Away Team Name"
+                          value={formData.away_team}
+                          onChange={(e) =>
+                            handleInputChange("away_team", e.target.value)
+                          }
+                          inputProps={{
+                            style: {
+                              textAlign: "center",
+                              fontSize: "1.3rem",
+                              fontWeight: 600,
+                            },
+                          }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <MemoizedTextField
+                    select
+                    label="League"
+                    value={formData.league}
+                    onChange={(e) =>
+                      handleInputChange("league", e.target.value)
+                    }
+                    fullWidth
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LeagueIcon fontSize="small" color="primary" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  >
+                    {leagueOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </MemoizedTextField>
+                </Grid>
+
+                <Grid item xs={12} md={3}>
+                  <MemoizedTextField
+                    fullWidth
+                    label="Match Date"
+                    type="date"
+                    value={formData.match_date}
+                    onChange={(e) =>
+                      handleInputChange("match_date", e.target.value)
+                    }
+                    InputLabelProps={{ shrink: true }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <EventNoteIcon fontSize="small" color="primary" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={3}>
+                  <MemoizedTextField
+                    fullWidth
+                    label="Match Time"
+                    type="time"
+                    value={formData.match_time}
+                    onChange={(e) =>
+                      handleInputChange("match_time", e.target.value)
+                    }
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Weather Condition</InputLabel>
+                    <MemoizedSelect
+                      value={formData.weather}
+                      onChange={(e) =>
+                        handleInputChange("weather", e.target.value)
+                      }
+                      label="Weather Condition"
+                    >
+                      {WEATHER_OPTIONS.map((opt) => (
+                        <MemoizedMenuItem key={opt} value={opt}>
+                          {opt}
+                        </MemoizedMenuItem>
+                      ))}
+                    </MemoizedSelect>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <MemoizedTextField
+                    fullWidth
+                    label="Referee"
+                    value={formData.referee}
+                    onChange={(e) =>
+                      handleInputChange("referee", e.target.value)
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <MemoizedTextField
+                    select
+                    label="Venue"
+                    value={formData.venue}
+                    onChange={(e) => handleInputChange("venue", e.target.value)}
+                    fullWidth
+                  >
+                    {venueOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </MemoizedTextField>
+                </Grid>
+              </Grid>
+            </Fade>
+          );
+
+        case 1: // Team Forms
+          return (
+            <Fade in timeout={300} mountOnEnter unmountOnExit>
+              <Box>
+                <Box sx={{ mb: 3 }}>
+                  <Last10Form
+                    teamName={formData.home_team || "Home Team"}
+                    value={homeFormMatches}
+                    onChange={setHomeFormMatches}
+                  />
+                </Box>
+                <Box>
+                  <Last10Form
+                    teamName={formData.away_team || "Away Team"}
+                    value={awayFormMatches}
+                    onChange={setAwayFormMatches}
+                  />
+                </Box>
+              </Box>
+            </Fade>
+          );
+
+        case 2: // Head-to-Head
+          return (
+            <Fade in timeout={300} mountOnEnter unmountOnExit>
+              <HeadToHeadInput
+                matches={headToHeadMatches}
+                onChange={setHeadToHeadMatches}
+                disabled={submitting}
+              />
+            </Fade>
+          );
+
+        case 3: // Markets
+          return (
+            <Fade in timeout={300} mountOnEnter unmountOnExit>
+              <Box>
+                <Box
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  mb={3}
+                >
+                  <Typography variant="h6" fontWeight={600}>
+                    Market Selection
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={addMarket}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    Custom Market
+                  </Button>
+                </Box>
+                <Grid container spacing={2}>
+                  {markets.map((market, index) => (
+                    <MarketItem
+                      key={market.id}
+                      market={market}
+                      index={index}
+                      marketErrors={marketErrors}
+                      submitting={submitting}
+                      onRemoveMarket={removeMarket}
+                      onMarketChange={handleMarketChange}
+                    />
+                  ))}
+                </Grid>
+              </Box>
+            </Fade>
+          );
+
+        case 4: // Review
+          return (
+            <Fade in timeout={300} mountOnEnter unmountOnExit>
+              <Box>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+                  {formData.league && (
+                    <Chip
+                      label={formData.league}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    />
+                  )}
+                  {formData.match_date && (
+                    <Chip
+                      label={`${formData.match_date} ${formData.match_time ? `@ ${formData.match_time}` : ""}`}
+                      icon={<EventNoteIcon />}
+                      size="small"
+                    />
+                  )}
+                  {formData.weather && (
+                    <Chip label={formData.weather} size="small" />
+                  )}
+                </Box>
+
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Box
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        border: "1px solid rgba(0,0,0,0.1)",
+                      }}
+                    >
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={600}
+                        gutterBottom
+                      >
+                        Data Density
+                      </Typography>
+                      <Typography variant="body2">
                         Home Form: <b>{homeFormMatches.length} matches</b>
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body2">
                         Away Form: <b>{awayFormMatches.length} matches</b>
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body2">
                         H2H History: <b>{headToHeadMatches.length} records</b>
                       </Typography>
                     </Box>
-                  </StyledPaper>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <StyledPaper
-                    sx={{ p: 3, border: "1px solid rgba(255,255,255,0.1)" }}
-                  >
-                    <Typography variant="overline" color="primary">
-                      Active Markets
-                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
                     <Box
-                      sx={{ mt: 1, display: "flex", flexWrap: "wrap", gap: 1 }}
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        border: "1px solid rgba(0,0,0,0.1)",
+                      }}
                     >
-                      {markets.map((m) => (
-                        <Chip
-                          key={m.id}
-                          label={m.name}
-                          size="small"
-                          color="success"
-                          variant="soft"
-                        />
-                      ))}
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={600}
+                        gutterBottom
+                      >
+                        Active Markets
+                      </Typography>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                        {markets
+                          .filter(
+                            (m) =>
+                              m.required || m.outcomes?.length > 0 || m.odds
+                          )
+                          .map((m) => (
+                            <Chip
+                              key={m.id}
+                              label={m.name}
+                              size="small"
+                              color="success"
+                              variant="outlined"
+                            />
+                          ))}
+                      </Box>
                     </Box>
-                  </StyledPaper>
+                  </Grid>
                 </Grid>
-              </Grid>
-            </Box>
-          </Fade>
-        );
-      default:
-        return null;
-    }
-  };
+              </Box>
+            </Fade>
+          );
+        default:
+          return null;
+      }
+    },
+    [
+      formData,
+      homeFormMatches,
+      awayFormMatches,
+      headToHeadMatches,
+      markets,
+      submitting,
+      handleInputChange,
+      addMarket,
+      removeMarket,
+      handleMarketChange,
+      marketErrors,
+    ]
+  );
+
+  // Memoize navigation handlers
+  const handleNext = useCallback(() => {
+    setActiveStep((s) => s + 1);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    setActiveStep((s) => s - 1);
+  }, []);
 
   return (
     <GradientContainer maxWidth="xl">
-      <Zoom in timeout={600}>
-        <StyledPaper
-          elevation={24}
-          sx={{ position: "relative", overflow: "hidden" }}
-        >
-          {/* Subtle Background Decoration */}
-          <Box
+      <StyledPaper elevation={8}>
+        <Header>
+          <Box display="flex" alignItems="center">
+            <Box sx={{ mr: 2 }}>
+              <SoccerIcon sx={{ fontSize: 32, color: "primary.main" }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" fontWeight="700">
+                Analysis Studio
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Feed the engine with match data
+              </Typography>
+            </Box>
+          </Box>
+          <Chip
+            icon={<WeightIcon fontSize="small" />}
+            label="Neural Ready"
+            size="small"
             sx={{
-              position: "absolute",
-              top: -100,
-              right: -100,
-              width: 300,
-              height: 300,
-              background:
-                "radial-gradient(circle, rgba(156, 39, 176, 0.1) 0%, transparent 70%)",
-              zIndex: 0,
+              bgcolor: "primary.50",
+              color: "primary.main",
             }}
           />
+        </Header>
 
-          <Header>
-            <Box display="flex" alignItems="center" sx={{ zIndex: 1 }}>
-              <Box
-                sx={{
-                  p: 1.5,
-                  borderRadius: 3,
-                  bgcolor: "rgba(255,255,255,0.1)",
-                  mr: 3,
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
-                }}
+        <Box sx={{ mt: 3 }}>
+          <form onSubmit={handleSubmit}>
+            {renderStepContent(activeStep)}
+
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                mt: 4,
+                pt: 3,
+                borderTop: "1px solid rgba(0,0,0,0.1)",
+              }}
+            >
+              <Button
+                variant="outlined"
+                disabled={activeStep === 0 || submitting}
+                onClick={handleBack}
+                startIcon={<ArrowBackIcon />}
               >
-                <SoccerIcon sx={{ fontSize: 40, color: "white" }} />
-              </Box>
-              <Box>
-                <Typography
-                  variant="h3"
-                  fontWeight="900"
-                  sx={{ letterSpacing: -1, color: "white" }}
-                >
-                  Analysis Studio
-                </Typography>
-                <Typography
-                  variant="subtitle1"
-                  sx={{ opacity: 0.8, color: "white" }}
-                >
-                  Feed the Python Engine with high-fidelity match data
-                </Typography>
-              </Box>
-            </Box>
-            <Box display="flex" gap={2} sx={{ zIndex: 1 }}>
-              <Tooltip title="Data completeness for AI analysis">
-                <Chip
-                  icon={<WeightIcon sx={{ color: "white !important" }} />}
-                  label="Neural Ready"
-                  sx={{
-                    bgcolor: "rgba(76, 175, 80, 0.3)",
-                    color: "white",
-                    px: 1,
-                  }}
-                />
-              </Tooltip>
-            </Box>
-          </Header>
+                Back
+              </Button>
 
-          <Box sx={{ mt: 4, position: "relative", zIndex: 1 }}>
-            <form onSubmit={handleSubmit}>
-              {renderStepContent(activeStep)}
-
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  mt: 8,
-                  pt: 4,
-                  borderTop: "1px solid rgba(255,255,255,0.05)",
-                }}
-              >
-                <Button
-                  variant="text"
-                  disabled={activeStep === 0 || submitting}
-                  onClick={() => setActiveStep((s) => s - 1)}
-                  startIcon={<ArrowBackIcon />}
-                  sx={{ color: "text.secondary", px: 4 }}
-                >
-                  Back
-                </Button>
-
-                <Box sx={{ display: "flex", gap: 2 }}>
-                  {activeStep === steps.length - 1 ? (
-                    <>
-                      <GradientButton
-                        variant="contained"
-                        type="submit"
-                        disabled={submitting}
-                        startIcon={
-                          submitting ? (
-                            <CircularProgress size={20} color="inherit" />
-                          ) : (
-                            <SaveIcon />
-                          )
-                        }
-                      >
-                        {submitting ? "Processing..." : "Commit Data"}
-                      </GradientButton>
-                      {savedMatchId && (
-                        <GradientButton
-                          variant="contained"
-                          sx={{
-                            background:
-                              "linear-gradient(45deg, #00c853 0%, #64ffda 100%)",
-                            color: "#003300",
-                          }}
-                          onClick={() => handleGenerateSlips(savedMatchId)}
-                          startIcon={
-                            isGenerating ? (
-                              <CircularProgress size={20} color="inherit" />
-                            ) : (
-                              <AutoAwesomeIcon />
-                            )
-                          }
-                          disabled={isGenerating}
-                        >
-                          {isGenerating ? "Analyzing..." : "Execute AI Brain"}
-                        </GradientButton>
-                      )}
-                    </>
-                  ) : (
+              <Box sx={{ display: "flex", gap: 1 }}>
+                {activeStep === steps.length - 1 ? (
+                  <>
                     <GradientButton
                       variant="contained"
-                      onClick={() => setActiveStep((s) => s + 1)}
-                      endIcon={<ArrowForwardIcon />}
-                      sx={{ px: 6 }}
+                      type="submit"
+                      disabled={submitting}
+                      startIcon={
+                        submitting ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : (
+                          <SaveIcon />
+                        )
+                      }
                     >
-                      Next Step
+                      {submitting ? "Saving..." : "Save Match"}
                     </GradientButton>
-                  )}
-                </Box>
+                    {savedMatchId && (
+                      <Button
+                        variant="contained"
+                        color="success"
+                        onClick={() => handleGenerateSlips()}
+                        startIcon={
+                          isGenerating ? (
+                            <CircularProgress size={16} color="inherit" />
+                          ) : (
+                            <AutoAwesomeIcon />
+                          )
+                        }
+                        disabled={isGenerating}
+                      >
+                        {isGenerating ? "Analyzing..." : "Run AI Analysis"}
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <GradientButton
+                    variant="contained"
+                    onClick={handleNext}
+                    endIcon={<ArrowForwardIcon />}
+                  >
+                    Next
+                  </GradientButton>
+                )}
               </Box>
-            </form>
-          </Box>
-        </StyledPaper>
-      </Zoom>
+            </Box>
+          </form>
+        </Box>
+      </StyledPaper>
 
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={5000}
+        autoHideDuration={4000}
         onClose={closeSnackbar}
       >
         <Alert
           onClose={closeSnackbar}
           severity={snackbar.severity}
           variant="filled"
-          sx={{ borderRadius: 4, boxShadow: "0 12px 40px rgba(0,0,0,0.3)" }}
+          sx={{ borderRadius: 2 }}
         >
           {snackbar.message}
         </Alert>
@@ -719,4 +782,12 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
   );
 };
 
-export default memo(MatchEntryForm);
+// Use React.memo with custom comparison
+export default memo(MatchEntryForm, (prevProps, nextProps) => {
+  // Custom comparison to prevent unnecessary re-renders
+  return (
+    prevProps.matchId === nextProps.matchId &&
+    prevProps.initialData === nextProps.initialData &&
+    prevProps.onSuccess === nextProps.onSuccess
+  );
+});
