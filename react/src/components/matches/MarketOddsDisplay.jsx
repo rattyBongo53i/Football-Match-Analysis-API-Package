@@ -1,330 +1,149 @@
-import React from 'react';
+import React from "react";
 import {
-  Grid,
-  Paper,
+  Card,
+  CardContent,
+  CardHeader,
   Typography,
   Box,
+  Grid,
+  Button,
   Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Divider,
-  LinearProgress,
-  Alert
-} from '@mui/material';
+  alpha,
+  Alert,
+} from "@mui/material";
 import {
+  AttachMoney as MoneyIcon,
   TrendingUp as OddsIcon,
-  EmojiEvents as TrophyIcon,
-  ShowChart as ChartIcon,
-  AttachMoney as MoneyIcon
-} from '@mui/icons-material';
-import './MarketOddsDisplay.css';
+} from "@mui/icons-material";
 
-const MarketOddsDisplay = ({ markets }) => {
+const MarketOddsDisplay = ({
+  markets = [],
+  onMarketSelect,
+  selectedMarketId,
+}) => {
+  const handleMarketClick = (market) => {
+    if (onMarketSelect) {
+      onMarketSelect(market);
+    }
+  };
+
+  const getOddsColor = (odds) => {
+    if (odds < 1.5) return "error";
+    if (odds < 2.5) return "warning";
+    if (odds < 4) return "info";
+    return "success";
+  };
+
+  const getOddsLabel = (odds) => {
+    if (odds < 1.5) return "High Favorite";
+    if (odds < 2.5) return "Moderate";
+    if (odds < 4) return "Underdog";
+    return "Long Shot";
+  };
+
   if (!markets || markets.length === 0) {
     return (
-      <Paper variant="outlined" sx={{ p: 3 }}>
-        <Alert severity="info">
-          No market odds available for this match
-        </Alert>
-      </Paper>
+      <Card variant="outlined">
+        <CardHeader
+          title={
+            <Typography variant="h6">
+              <MoneyIcon color="info" sx={{ mr: 1 }} />
+              Betting Markets
+            </Typography>
+          }
+        />
+        <CardContent>
+          <Alert severity="info">
+            No betting markets available for this match
+          </Alert>
+        </CardContent>
+      </Card>
     );
   }
 
-  const formatMarketName = (name) => {
-    if (!name) return 'Unknown Market';
-    return name
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, l => l.toUpperCase());
-  };
-
-  const getMarketColor = (marketType) => {
-    switch (marketType?.toLowerCase()) {
-      case 'match_result':
-      case '1x2':
-        return '#1976d2';
-      case 'over_under':
-      case 'over/under':
-        return '#2e7d32';
-      case 'both_teams_score':
-        return '#ed6c02';
-      case 'double_chance':
-        return '#9c27b0';
-      case 'correct_score':
-        return '#d32f2f';
-      default:
-        return '#666';
-    }
-  };
-
-  const renderMarketOdds = (market) => {
-    if (market.name === '1X2' || market.market_type === 'match_result') {
-      return (
-        <Grid container spacing={2}>
-          <Grid item xs={4}>
-            <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Home
-              </Typography>
-              <Typography variant="h5" color="primary" fontWeight="bold">
-                {market.home_odds?.toFixed(2) || 'N/A'}
-              </Typography>
-              <Chip label="1" size="small" sx={{ mt: 1 }} />
-            </Paper>
-          </Grid>
-          <Grid item xs={4}>
-            <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Draw
-              </Typography>
-              <Typography variant="h5" color="text.secondary" fontWeight="bold">
-                {market.draw_odds?.toFixed(2) || 'N/A'}
-              </Typography>
-              <Chip label="X" size="small" sx={{ mt: 1 }} />
-            </Paper>
-          </Grid>
-          <Grid item xs={4}>
-            <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Away
-              </Typography>
-              <Typography variant="h5" color="error" fontWeight="bold">
-                {market.away_odds?.toFixed(2) || 'N/A'}
-              </Typography>
-              <Chip label="2" size="small" sx={{ mt: 1 }} />
-            </Paper>
-          </Grid>
-        </Grid>
-      );
-    }
-
-    if (market.name?.includes('Over/Under') || market.market_type === 'over_under') {
-      const threshold = market.name?.match(/\d+\.?\d*/)?.[0] || '2.5';
-      return (
-        <Grid container spacing={2}>
-          <Grid item xs={6}>
-            <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Over {threshold}
-              </Typography>
-              <Typography variant="h5" color="success" fontWeight="bold">
-                {market.over_odds?.toFixed(2) || market.odds?.toFixed(2) || 'N/A'}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6}>
-            <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Under {threshold}
-              </Typography>
-              <Typography variant="h5" color="error" fontWeight="bold">
-                {market.under_odds?.toFixed(2) || 'N/A'}
-              </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
-      );
-    }
-
-    return (
-      <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-        <Typography variant="caption" color="text.secondary" display="block">
-          Odds
-        </Typography>
-        <Typography variant="h4" color="primary" fontWeight="bold">
-          {market.odds?.toFixed(2) || 'N/A'}
-        </Typography>
-      </Paper>
-    );
-  };
-
-  const renderMarketDetails = (market) => {
-    return (
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Outcome</TableCell>
-              <TableCell align="right">Odds</TableCell>
-              <TableCell align="right">Probability</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {market.outcomes?.map((outcome, index) => (
-              <TableRow key={index}>
-                <TableCell>
-                  <Typography variant="body2">
-                    {outcome.outcome}
-                  </Typography>
-                </TableCell>
-                <TableCell align="right">
-                  <Chip
-                    label={outcome.odds?.toFixed(2) || 'N/A'}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                  />
-                </TableCell>
-                <TableCell align="right">
-                  <Typography variant="body2" color="text.secondary">
-                    {outcome.odds ? `${(1 / outcome.odds * 100).toFixed(1)}%` : 'N/A'}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )) || (
-              <TableRow>
-                <TableCell colSpan={3} align="center">
-                  <Typography variant="body2" color="text.secondary">
-                    No outcome data available
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    );
-  };
-
   return (
-    <Box>
-      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-        <MoneyIcon /> Market Odds
-      </Typography>
-
-      <Grid container spacing={3}>
-        {markets.map((market, index) => (
-          <Grid item xs={12} md={6} key={index}>
-            <Paper 
-              variant="outlined" 
-              sx={{ 
-                p: 2, 
-                height: '100%',
-                borderLeft: `4px solid ${getMarketColor(market.market_type || market.name)}`
-              }}
-            >
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <OddsIcon sx={{ color: getMarketColor(market.market_type || market.name) }} />
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {formatMarketName(market.name)}
-                  </Typography>
-                </Box>
-                <Chip
-                  label={market.market_type || 'standard'}
-                  size="small"
-                  sx={{
-                    backgroundColor: getMarketColor(market.market_type || market.name),
-                    color: 'white'
-                  }}
-                />
-              </Box>
-
-              <Divider sx={{ mb: 2 }} />
-
-              {/* Market Odds Display */}
-              <Box mb={3}>
-                {renderMarketOdds(market)}
-              </Box>
-
-              {/* Market Details */}
-              <Box>
-                <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ChartIcon fontSize="small" /> Market Details
-                </Typography>
-                {renderMarketDetails(market)}
-              </Box>
-
-              {/* Market Summary */}
-              {market.notes && (
-                <Box mt={2}>
-                  <Typography variant="caption" color="text.secondary">
-                    {market.notes}
-                  </Typography>
-                </Box>
-              )}
-            </Paper>
-          </Grid>
-        ))}
-      </Grid>
-
-      {/* Overall Market Summary */}
-      {markets.length > 0 && (
-        <Paper variant="outlined" sx={{ p: 2, mt: 3 }}>
-          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <TrophyIcon fontSize="small" /> Market Summary
+    <Card variant="outlined">
+      <CardHeader
+        title={
+          <Typography variant="h6">
+            <MoneyIcon color="info" sx={{ mr: 1 }} />
+            Betting Markets & Odds
           </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={6} md={3}>
-              <Box textAlign="center">
-                <Typography variant="caption" color="text.secondary">
-                  Total Markets
+        }
+        subheader="Select a market to add to betslip"
+      />
+      <CardContent>
+        {selectedMarketId && (
+          <Alert severity="success" sx={{ mb: 3 }}>
+            Market selected:{" "}
+            {markets.find((m) => m.id === selectedMarketId)?.name}
+          </Alert>
+        )}
+
+        <Grid container spacing={2}>
+          {markets.map((market) => (
+            <Grid item xs={12} sm={6} md={4} key={market.id}>
+              <Button
+                fullWidth
+                variant={
+                  selectedMarketId === market.id ? "contained" : "outlined"
+                }
+                onClick={() => handleMarketClick(market)}
+                sx={{
+                  p: 2,
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: selectedMarketId === market.id ? 2 : 1,
+                  borderColor:
+                    selectedMarketId === market.id ? "primary.main" : "divider",
+                  bgcolor:
+                    selectedMarketId === market.id
+                      ? alpha("#1976d2", 0.1)
+                      : "background.paper",
+                  "&:hover": {
+                    bgcolor: alpha("#1976d2", 0.05),
+                    borderColor: "primary.main",
+                  },
+                }}
+              >
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                  {market.name}
                 </Typography>
-                <Typography variant="h5" fontWeight="bold">
-                  {markets.length}
-                </Typography>
-              </Box>
+
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+                >
+                  <OddsIcon fontSize="small" />
+                  <Typography variant="h5" color={getOddsColor(market.odds)}>
+                    {market.odds}
+                  </Typography>
+                </Box>
+
+                <Chip
+                  label={getOddsLabel(market.odds)}
+                  size="small"
+                  color={getOddsColor(market.odds)}
+                  variant="outlined"
+                />
+
+                {market.probability && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mt: 1 }}
+                  >
+                    Probability: {(market.probability * 100).toFixed(1)}%
+                  </Typography>
+                )}
+              </Button>
             </Grid>
-            <Grid item xs={6} md={3}>
-              <Box textAlign="center">
-                <Typography variant="caption" color="text.secondary">
-                  Avg. Odds
-                </Typography>
-                <Typography variant="h5" fontWeight="bold" color="primary">
-                  {(
-                    markets.reduce((sum, market) => {
-                      const odds = market.odds || market.home_odds || 0;
-                      return sum + parseFloat(odds);
-                    }, 0) / markets.length
-                  ).toFixed(2)}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={6} md={3}>
-              <Box textAlign="center">
-                <Typography variant="caption" color="text.secondary">
-                  Highest Odds
-                </Typography>
-                <Typography variant="h5" fontWeight="bold" color="success">
-                  {Math.max(
-                    ...markets.map(market => 
-                      Math.max(
-                        market.odds || 0,
-                        market.home_odds || 0,
-                        market.draw_odds || 0,
-                        market.away_odds || 0
-                      )
-                    )
-                  ).toFixed(2)}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={6} md={3}>
-              <Box textAlign="center">
-                <Typography variant="caption" color="text.secondary">
-                  Lowest Odds
-                </Typography>
-                <Typography variant="h5" fontWeight="bold" color="error">
-                  {Math.min(
-                    ...markets.map(market => 
-                      Math.min(
-                        market.odds || Infinity,
-                        market.home_odds || Infinity,
-                        market.draw_odds || Infinity,
-                        market.away_odds || Infinity
-                      )
-                    ).filter(val => val > 0)
-                  ).toFixed(2)}
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
-        </Paper>
-      )}
-    </Box>
+          ))}
+        </Grid>
+      </CardContent>
+    </Card>
   );
 };
 

@@ -1,255 +1,168 @@
-/* Global Styles for Gray Theme */
+/* Refactored Global Styles: Soft Light & Glassmorphism */
 
-/* Custom scrollbar */
+:root {
+  --primary-gradient: linear-gradient(135deg, #6A1B9A 0%, #9C27B0 100%);
+  --secondary-gradient: linear-gradient(135deg, #00BFA5 0%, #1DE9B6 100%);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.4);
+  --soft-shadow: 0 8px 32px rgba(31, 38, 135, 0.07);
+}
+
+/* Custom modern scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #F5F5F7;
-  border-radius: 8px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #BDBDBD;
-  border-radius: 8px;
-  border: 2px solid #F5F5F7;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  border: 2px solid #F8F9FC; /* Matches theme background */
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9E9E9E;
+  background: rgba(106, 27, 154, 0.2);
 }
 
 .main-content {
-  margin-left: 280px; /* Match sidebar width */
-  padding: 20px;
+  margin-left: 280px;
+  padding: 32px;
   min-height: 100vh;
+  transition: margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-/* Global animations */
-@keyframes fadeIn {
+
+/* --- Refined Spring Animations --- */
+@keyframes revealUp {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(20px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+@keyframes glassShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
-
-@keyframes gradientShift {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-/* Apply fade-in animation to all components */
+/* Apply reveal animation to Paper components */
 .MuiPaper-root {
-  animation: fadeIn 0.5s ease-out;
+  animation: revealUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* Glass effect for cards */
+/* --- Modern Glass Effect --- */
 .glass-effect {
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(10px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08) !important;
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(12px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: var(--soft-shadow) !important;
+  border-radius: 20px !important;
 }
 
-/* Purple gradient */
+/* --- Gradient Logic --- */
 .purple-gradient {
-  background: linear-gradient(135deg, #6A1B9A 0%, #9C27B0 100%) !important;
-  background-size: 200% 200% !important;
-  animation: gradientShift 3s ease infinite !important;
+  background: var(--primary-gradient) !important;
   color: white !important;
+  box-shadow: 0 4px 15px rgba(106, 27, 154, 0.2) !important;
 }
 
-/* Green gradient */
 .green-gradient {
-  background: linear-gradient(135deg, #2E7D32 0%, #43A047 100%) !important;
-  background-size: 200% 200% !important;
-  animation: gradientShift 3s ease infinite !important;
+  background: var(--secondary-gradient) !important;
   color: white !important;
+  box-shadow: 0 4px 15px rgba(0, 191, 165, 0.2) !important;
 }
 
-/* Custom card styles */
+/* --- Betting Card Overhaul --- */
 .betting-card {
   position: relative;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  border: 1px solid rgba(106, 27, 154, 0.1) !important;
-  background: linear-gradient(135deg, #FFFFFF 0%, #FAFAFA 100%) !important;
+  background: white !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 
 .betting-card:hover {
-  transform: translateY(-4px) !important;
-  box-shadow: 0 12px 40px rgba(106, 27, 154, 0.15) !important;
-  border-color: rgba(106, 27, 154, 0.3) !important;
+  transform: translateY(-8px) !important;
+  box-shadow: 0 20px 40px rgba(106, 27, 154, 0.08) !important;
+  border-color: rgba(106, 27, 154, 0.15) !important;
 }
 
-.betting-card::before {
+/* Modern Shimmer Effect */
+.betting-card::after {
   content: '';
   position: absolute;
   top: 0;
-  left: -100%;
-  width: 100%;
+  left: -150%;
+  width: 50%;
   height: 100%;
   background: linear-gradient(
-    90deg,
+    to right,
     transparent,
-    rgba(106, 27, 154, 0.05),
+    rgba(255, 255, 255, 0.6),
     transparent
   );
-  transition: left 0.7s;
+  transform: skewX(-20deg);
+  transition: 0.75s;
 }
 
-.betting-card:hover::before {
-  left: 100%;
+.betting-card:hover::after {
+  left: 150%;
 }
 
-/* Status indicators */
-.profit-indicator {
-  display: inline-block;
+/* --- Status Indicators --- */
+.profit-indicator, .loss-indicator, .neutral-indicator {
   padding: 6px 16px;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  background: linear-gradient(135deg, #2E7D32, #43A047) !important;
-  color: white !important;
-  box-shadow: 0 2px 8px rgba(46, 125, 50, 0.3) !important;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+}
+
+.profit-indicator {
+  background: rgba(0, 191, 165, 0.1) !important;
+  color: #00796B !important;
 }
 
 .loss-indicator {
-  display: inline-block;
-  padding: 6px 16px;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  background: linear-gradient(135deg, #D32F2F, #EF5350) !important;
-  color: white !important;
-  box-shadow: 0 2px 8px rgba(211, 47, 47, 0.3) !important;
+  background: rgba(211, 47, 47, 0.1) !important;
+  color: #C62828 !important;
 }
 
-.neutral-indicator {
-  display: inline-block;
-  padding: 6px 16px;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  background: linear-gradient(135deg, #F57C00, #FFB74D) !important;
-  color: white !important;
-  box-shadow: 0 2px 8px rgba(245, 124, 0, 0.3) !important;
-}
-
-/* Form styling enhancements */
-.MuiTextField-root .MuiOutlinedInput-root {
-  background: #FFFFFF !important;
-  transition: all 0.3s ease !important;
-}
-
-.MuiTextField-root .MuiOutlinedInput-root:hover {
-  background: #FAFAFA !important;
-}
-
-.MuiTextField-root .MuiOutlinedInput-root.Mui-focused {
-  background: #FFFFFF !important;
-  box-shadow: 0 0 0 3px rgba(106, 27, 154, 0.1) !important;
-}
-
-/* Table styling */
+/* --- Table Enhancements --- */
 .MuiTableRow-root {
-  transition: background-color 0.2s ease !important;
+  transition: all 0.2s ease !important;
 }
 
 .MuiTableRow-root:hover {
-  background-color: rgba(106, 27, 154, 0.02) !important;
+  background-color: rgba(106, 27, 154, 0.03) !important;
+  transform: scale(1.002);
 }
 
-/* Custom chip styles */
-.custom-chip {
-  border-radius: 8px !important;
-  font-weight: 500 !important;
-  transition: all 0.3s ease !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
-}
-
-.custom-chip:hover {
-  transform: scale(1.05) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* Loading animation */
-.loading-spinner {
-  display: inline-block;
-  width: 50px;
-  height: 50px;
-  border: 3px solid rgba(106, 27, 154, 0.1);
-  border-radius: 50%;
-  border-top-color: #6A1B9A;
-  animation: spin 1s ease-in-out infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Typography enhancements */
-.text-gradient {
-  background: linear-gradient(135deg, #6A1B9A, #2E7D32) !important;
-  -webkit-background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-  background-clip: text !important;
-}
-
-/* Glow effect */
-.glow-effect {
-  box-shadow: 0 0 20px rgba(106, 27, 154, 0.3) !important;
-}
-
-/* Dashboard layout improvements */
-.dashboard-grid {
-  display: grid;
-  gap: 24px;
-}
-
-/* Responsive behavior */
-@media (max-width: 768px) {
-  .Sidebar {
-    width: 100%;
-    height: auto;
-    position: relative;
-  }
-  
+/* --- Responsive Layout --- */
+@media (max-width: 900px) {
   .main-content {
     margin-left: 0;
+    padding: 20px;
   }
+}
+
+/* Fix for Dialogs in Light Mode */
+.MuiDialog-paper {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(20px) !important;
+  color: #1C1C1E !important;
+  border-radius: 24px !important;
+  border: 1px solid white !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.1) !important;
 }

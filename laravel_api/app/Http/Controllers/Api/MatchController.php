@@ -186,52 +186,59 @@ class MatchController extends Controller
      * Display the specified match.
      */
     public function show(string $id): JsonResponse
-    {
-        try {
+{
+    try {
+        $match = MatchModel::query()
+            ->select([
+                'id',
+                'home_team',
+                'away_team',
+                'league',
+                'match_date',
+                'status',
+                'home_score',
+                'away_score',
+                'analysis_status',
+                'prediction_ready',
+                'created_at',
+                'updated_at'
+            ])
+            ->with([
+                'headToHead',
+                'teamForms',
+                'markets' => function ($query) {
+                    // Optionally order markets or filter active ones
+                    $query->orderBy('sort_order', 'asc')
+                          ->wherePivot('is_active', true); // Only active markets
+                },
+                // If you want full match_market details instead/alongside
+                // 'matchMarkets',
+            ])
+            ->withCount('markets as markets_count')
+            ->findOrFail($id);
 
-            $match = MatchModel::query()
-                ->select([
-                    'id',
-                    'home_team',           // ← string name (denormalized)
-                    'away_team',           // ← string name (denormalized)
-                    'league',
-                    'match_date',
-                    'status',
-                    'home_score',
-                    'away_score',
-                    'analysis_status',
-                    'prediction_ready',
-                    'created_at',
-                    'updated_at'
-                ])
-                ->with([
-                    'headToHead',     // optional: keep if you want H2H summary
-                    'teamForms',      // optional: keep if you want form count/stats
-                ])->findOrFail($id);
-            // ->withCount('markets as markets_count') // ← shows number of markets
+        return response()->json([
+            'success'  => true,
+            'data' => $match,
+        ]);
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Match not found',
+        ], 404);
+    } catch (\Exception $e) {
+        Log::error('Failed to retrieve match', [
+            'match_id' => $id,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
 
-
-            return response()->json([
-                'success' => true,
-                'data' => $match,
-            ]);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Match not found',
-            ], 404);
-        } catch (\Exception $e) {
-            Log::error('Failed to retrieve match', [
-                'match_id' => $id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve match',
-            ], 500);
-        }
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to retrieve match',
+        ], 500);
     }
+}
 
     /**
      * Update the specified match.

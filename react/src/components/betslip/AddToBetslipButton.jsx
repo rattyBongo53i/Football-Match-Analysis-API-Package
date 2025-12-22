@@ -36,6 +36,7 @@ const AddToBetslipButton = ({
     getActiveSlips,
     getCurrentSlipId,
     setCurrentSlipId,
+    createNewSlip,
   } = useBetslip();
 
   const [selectingSlip, setSelectingSlip] = useState(false);
@@ -45,7 +46,7 @@ const AddToBetslipButton = ({
   const currentSlipId = getCurrentSlipId();
   const activeSlips = getActiveSlips();
 
-  const handleAddToBetslip = async (slipId = null) => {
+  const handleAdd = async (slipId = null) => {
     if (isInBetslip) return;
 
     setAdding(true);
@@ -53,33 +54,32 @@ const AddToBetslipButton = ({
       await addMatchToBetslip(match, slipId);
       setSelectingSlip(false);
     } catch (error) {
-      console.error("Failed to add match to betslip:", error);
+      console.error("Failed to add match:", error);
     } finally {
       setAdding(false);
     }
   };
 
-  const handleOpenSlipSelection = () => {
+  const handleOpenSelection = () => {
     if (isInBetslip) return;
 
-    // If there's a current slip ID, use it directly
     if (currentSlipId) {
-      handleAddToBetslip(currentSlipId);
+      handleAdd(currentSlipId);
     } else {
-      // Otherwise show slip selection
       setSelectingSlip(true);
     }
   };
 
-  const handleSelectSlip = (slipId) => {
-    setCurrentSlipId(slipId);
-    handleAddToBetslip(slipId);
-  };
-
-  const handleCreateNewSlip = () => {
-    // This should navigate to create slip page
-    // or trigger slip creation via context if available
-    window.location.href = "/slips/create";
+  const handleCreateNew = async () => {
+    setAdding(true);
+    try {
+      const { success, slip } = await createNewSlip({ name: "New Slip" });
+      if (success) {
+        handleAdd(slip.id);
+      }
+    } finally {
+      setAdding(false);
+    }
   };
 
   if (isInBetslip) {
@@ -102,13 +102,12 @@ const AddToBetslipButton = ({
         variant={variant}
         size={size}
         startIcon={adding ? <CircularProgress size={20} /> : <AddIcon />}
-        onClick={handleOpenSlipSelection}
+        onClick={handleOpenSelection}
         disabled={adding || isInBetslip}
       >
         {adding ? "Adding..." : "Add to Betslip"}
       </Button>
 
-      {/* Slip Selection Dialog */}
       <Dialog
         open={selectingSlip}
         onClose={() => setSelectingSlip(false)}
@@ -121,7 +120,7 @@ const AddToBetslipButton = ({
             alignItems="center"
             justifyContent="space-between"
           >
-            <Typography variant="h6">Select a Slip</Typography>
+            <Typography variant="h6">Choose a Slip</Typography>
             <IconButton onClick={() => setSelectingSlip(false)} size="small">
               <CloseIcon />
             </IconButton>
@@ -129,19 +128,20 @@ const AddToBetslipButton = ({
         </DialogTitle>
 
         <DialogContent>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Select which slip to add this match to:
-          </Typography>
-
           {activeSlips.length === 0 ? (
             <Box textAlign="center" py={3}>
               <SlipIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
               <Typography variant="body1" gutterBottom>
-                No active slips found
+                No active slips yet
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Create a new slip to add matches
-              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleCreateNew}
+                disabled={adding}
+              >
+                Create New Slip
+              </Button>
             </Box>
           ) : (
             <List>
@@ -149,13 +149,11 @@ const AddToBetslipButton = ({
                 <ListItem
                   key={slip.id}
                   button
-                  onClick={() => handleSelectSlip(slip.id)}
+                  onClick={() => handleAdd(slip.id)}
                   sx={{
                     borderRadius: 1,
                     mb: 1,
-                    "&:hover": {
-                      backgroundColor: "action.hover",
-                    },
+                    "&:hover": { backgroundColor: "action.hover" },
                   }}
                 >
                   <ListItemText
@@ -174,13 +172,12 @@ const AddToBetslipButton = ({
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setSelectingSlip(false)} variant="outlined">
-            Cancel
-          </Button>
+          <Button onClick={() => setSelectingSlip(false)}>Cancel</Button>
           <Button
-            onClick={handleCreateNewSlip}
             variant="contained"
             startIcon={<AddIcon />}
+            onClick={handleCreateNew}
+            disabled={adding}
           >
             Create New Slip
           </Button>

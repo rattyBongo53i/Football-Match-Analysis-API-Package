@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Table,
@@ -7,492 +7,696 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
+  TablePagination,
+  TableSortLabel,
   IconButton,
   Chip,
-  Box,
-  Typography,
-  LinearProgress,
-  Tooltip,
-  Alert,
-  Snackbar,
   Avatar,
   AvatarGroup,
-  alpha,
+  Typography,
+  Box,
+  Paper,
   Button,
+  Menu,
+  MenuItem,
   Fade,
+  Card,
+  CardContent,
+  Tooltip,
+  LinearProgress,
+  alpha,
+  useTheme,
+  styled,
 } from "@mui/material";
 import {
   Visibility as ViewIcon,
-  Delete as DeleteIcon,
-  SportsSoccer as SoccerIcon,
   Edit as EditIcon,
-  Schedule as ScheduleIcon,
+  Delete as DeleteIcon,
+  MoreVert as MoreVertIcon,
+  SportsSoccer as SoccerIcon,
+  AccessTime as TimeIcon,
   EmojiEvents as TrophyIcon,
   TrendingUp as TrendingIcon,
-  Cancel as CancelIcon,
-  CheckCircle as CheckIcon,
-  AccessTime as TimeIcon,
+  CheckCircle as CompletedIcon,
+  Pending as PendingIcon,
+  Cancel as CancelledIcon,
+  PlayCircle as OngoingIcon,
+  FilterList as FilterIcon,
+  Search as SearchIcon,
 } from "@mui/icons-material";
-import { useBetslip } from "../../contexts/BetslipContext";
-import AddToBetslipButton from "../../components/betslip/AddToBetslipButton";
-import "./MatchesTable.css";
 
-const MatchesTable = ({ matches, onDelete, loading }) => {
+// Styled Components
+const StyledTableRow = styled(TableRow)(({ theme, matchstatus }) => ({
+  "&:hover": {
+    backgroundColor: alpha(theme.palette.primary.main, 0.03),
+    transition: "background-color 0.3s ease",
+  },
+  ...(matchstatus === "completed" && {
+    backgroundColor: alpha(theme.palette.success.main, 0.02),
+    borderLeft: `4px solid ${theme.palette.success.main}`,
+  }),
+  ...(matchstatus === "ongoing" && {
+    backgroundColor: alpha(theme.palette.warning.main, 0.02),
+    borderLeft: `4px solid ${theme.palette.warning.main}`,
+  }),
+  ...(matchstatus === "cancelled" && {
+    backgroundColor: alpha(theme.palette.error.main, 0.02),
+    borderLeft: `4px solid ${theme.palette.error.main}`,
+  }),
+}));
+
+const StatusChip = styled(Chip)(({ theme, status }) => ({
+  fontWeight: 600,
+  ...(status === "completed" && {
+    backgroundColor: alpha(theme.palette.success.main, 0.15),
+    color: theme.palette.success.dark,
+    border: `1px solid ${alpha(theme.palette.success.main, 0.3)}`,
+  }),
+  ...(status === "ongoing" && {
+    backgroundColor: alpha(theme.palette.warning.main, 0.15),
+    color: theme.palette.warning.dark,
+    border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}`,
+  }),
+  ...(status === "scheduled" && {
+    backgroundColor: alpha(theme.palette.info.main, 0.15),
+    color: theme.palette.info.dark,
+    border: `1px solid ${alpha(theme.palette.info.main, 0.3)}`,
+  }),
+  ...(status === "cancelled" && {
+    backgroundColor: alpha(theme.palette.error.main, 0.15),
+    color: theme.palette.error.dark,
+    border: `1px solid ${alpha(theme.palette.error.main, 0.3)}`,
+  }),
+}));
+
+const ScoreContainer = styled(Box)(({ theme, winner }) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  padding: theme.spacing(0.5, 1.5),
+  borderRadius: "12px",
+  backgroundColor: alpha(
+    winner === "home"
+      ? theme.palette.primary.main
+      : winner === "away"
+        ? theme.palette.error.main
+        : theme.palette.warning.main,
+    0.1
+  ),
+  border: `1px solid ${alpha(
+    winner === "home"
+      ? theme.palette.primary.main
+      : winner === "away"
+        ? theme.palette.error.main
+        : theme.palette.warning.main,
+    0.3
+  )}`,
+}));
+
+const ActionButton = styled(IconButton)(({ theme, actiontype }) => ({
+  backgroundColor: alpha(
+    actiontype === "view"
+      ? theme.palette.info.main
+      : actiontype === "edit"
+        ? theme.palette.warning.main
+        : theme.palette.error.main,
+    0.1
+  ),
+  color:
+    actiontype === "view"
+      ? theme.palette.info.main
+      : actiontype === "edit"
+        ? theme.palette.warning.main
+        : theme.palette.error.main,
+  "&:hover": {
+    backgroundColor: alpha(
+      actiontype === "view"
+        ? theme.palette.info.main
+        : actiontype === "edit"
+          ? theme.palette.warning.main
+          : theme.palette.error.main,
+      0.2
+    ),
+  },
+}));
+
+const EnhancedTableHeadCell = styled(TableCell)(({ theme }) => ({
+  backgroundColor: alpha(theme.palette.primary.main, 0.05),
+  fontWeight: 700,
+  fontSize: "0.9rem",
+  color: theme.palette.primary.dark,
+}));
+
+const LeagueAvatar = styled(Avatar)(({ theme, leaguecolor }) => ({
+  backgroundColor: leaguecolor || theme.palette.secondary.main,
+  width: 32,
+  height: 32,
+  fontSize: "0.875rem",
+}));
+
+const getStatusIcon = (status) => {
+  switch (status?.toLowerCase()) {
+    case "completed":
+      return <CompletedIcon />;
+    case "ongoing":
+      return <OngoingIcon />;
+    case "scheduled":
+      return <PendingIcon />;
+    case "cancelled":
+      return <CancelledIcon />;
+    default:
+      return <PendingIcon />;
+  }
+};
+
+const getFormIndicator = (form) => {
+  if (!form || !form.recent_results) return null;
+
+  const wins = (form.recent_results || []).filter((r) => r === "W").length;
+  const total = form.recent_results?.length || 1;
+  const winRate = (wins / total) * 100;
+
+  return (
+    <Tooltip title={`Win Rate: ${Math.round(winRate)}%`}>
+      <Box sx={{ width: 60 }}>
+        <LinearProgress
+          variant="determinate"
+          value={winRate}
+          color={
+            winRate >= 60 ? "success" : winRate >= 40 ? "warning" : "error"
+          }
+          sx={{
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: alpha("#000", 0.1),
+          }}
+        />
+      </Box>
+    </Tooltip>
+  );
+};
+
+const MatchesTable = ({ matches, onView, onEdit, onDelete }) => {
   const navigate = useNavigate();
-  const { isMatchInBetslip } = useBetslip();
-  const [deleteConfirm, setDeleteConfirm] = React.useState(null);
-  const [showDeleteSuccess, setShowDeleteSuccess] = React.useState(false);
-  const [deletedMatchName, setDeletedMatchName] = React.useState("");
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [orderBy, setOrderBy] = useState("match_date");
+  const [order, setOrder] = useState("desc");
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedMatch, setSelectedMatch] = useState(null);
 
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case "completed":
-        return "success";
-      case "ongoing":
-      case "in_progress":
-        return "warning";
-      case "scheduled":
-        return "info";
-      case "cancelled":
-        return "error";
-      case "postponed":
-        return "secondary";
-      default:
-        return "default";
+  const theme = useTheme();
+
+  const handleRequestSort = (property) => {
+    const isAsc = orderBy === property && order === "asc";
+    setOrder(isAsc ? "desc" : "asc");
+    setOrderBy(property);
+  };
+
+  const handleClick = (event, match) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedMatch(match);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+    setSelectedMatch(null);
+  };
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // Handle view action - redirects to match detail page
+  const handleView = (match) => {
+    navigate(`/matches/${match.id}`);
+  };
+
+  // Handle the case where onView prop is not provided
+  const handleViewAction = (match) => {
+    if (onView) {
+      onView(match);
+    } else {
+      handleView(match);
     }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status?.toLowerCase()) {
-      case "completed":
-        return <CheckIcon fontSize="small" />;
-      case "ongoing":
-        return <TrendingIcon fontSize="small" />;
-      case "scheduled":
-        return <ScheduleIcon fontSize="small" />;
-      case "cancelled":
-        return <CancelIcon fontSize="small" />;
-      default:
-        return <TimeIcon fontSize="small" />;
-    }
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    if (date.toDateString() === today.toDateString()) {
-      return "Today";
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return "Tomorrow";
-    }
-    
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const handleDeleteClick = (matchId, matchName, e) => {
-    e.stopPropagation();
-    setDeleteConfirm({
-      id: matchId,
-      name: matchName,
-    });
-  };
-
-  const handleConfirmDelete = () => {
-    if (deleteConfirm) {
-      setDeletedMatchName(deleteConfirm.name);
-      onDelete(deleteConfirm.id);
-      setDeleteConfirm(null);
-      setShowDeleteSuccess(true);
-    }
-  };
-
-  const handleCancelDelete = () => {
-    setDeleteConfirm(null);
   };
 
   const getTeamInitials = (teamName) => {
     if (!teamName) return "??";
     return teamName
       .split(" ")
-      .map(word => word[0])
+      .map((word) => word[0])
       .join("")
       .toUpperCase()
       .slice(0, 2);
   };
 
-  const getLeagueIcon = (league) => {
-    if (!league) return <TrophyIcon fontSize="small" />;
-    
-    const leagueLower = league.toLowerCase();
-    if (leagueLower.includes("premier")) return <TrophyIcon fontSize="small" />;
-    if (leagueLower.includes("champions")) return <SoccerIcon fontSize="small" />;
-    if (leagueLower.includes("europa")) return <TrendingIcon fontSize="small" />;
-    return <TrophyIcon fontSize="small" />;
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
-  const getScoreColor = (homeScore, awayScore) => {
-    if (homeScore === null || awayScore === null) return "text.secondary";
-    if (homeScore > awayScore) return "success.main";
-    if (homeScore < awayScore) return "error.main";
-    return "warning.main";
+  const formatTime = (timeString) => {
+    if (!timeString) return "";
+    return timeString;
   };
 
-  if (matches.length === 0 && !loading) {
-    return (
-      <Paper 
-        elevation={0} 
-        sx={{ 
-          p: 6, 
-          textAlign: "center",
-          borderRadius: 2,
-          border: "2px dashed",
-          borderColor: "divider",
-          backgroundColor: (theme) => alpha(theme.palette.primary.light, 0.03)
-        }}
-      >
-        <SoccerIcon 
-          sx={{ 
-            fontSize: 64, 
-            color: "text.secondary", 
-            mb: 2,
-            opacity: 0.5
-          }} 
-        />
-        <Typography variant="h5" color="text.secondary" gutterBottom>
-          No matches found
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Start by adding your first match to get started
-        </Typography>
-        <Button 
-          variant="contained" 
-          startIcon={<EditIcon />}
-          onClick={() => navigate("/matches/new")}
-        >
-          Add New Match
-        </Button>
-      </Paper>
+  const getWinner = (match) => {
+    if (match.home_score === null || match.away_score === null) return null;
+    if (match.home_score > match.away_score) return "home";
+    if (match.home_score < match.away_score) return "away";
+    return "draw";
+  };
+
+  const sortedMatches = useMemo(() => {
+    return [...matches].sort((a, b) => {
+      if (orderBy === "match_date") {
+        return order === "asc"
+          ? new Date(a.match_date) - new Date(b.match_date)
+          : new Date(b.match_date) - new Date(a.match_date);
+      }
+      if (orderBy === "home_score") {
+        return order === "asc"
+          ? (a.home_score || 0) - (b.home_score || 0)
+          : (b.home_score || 0) - (a.home_score || 0);
+      }
+      return 0;
+    });
+  }, [matches, order, orderBy]);
+
+  const paginatedMatches = useMemo(() => {
+    return sortedMatches.slice(
+      page * rowsPerPage,
+      page * rowsPerPage + rowsPerPage
     );
-  }
+  }, [sortedMatches, page, rowsPerPage]);
+
+  const leagueColors = {
+    "Premier League": "#3D195B",
+    "La Liga": "#FFD700",
+    Bundesliga: "#D3010C",
+    "Serie A": "#0066B3",
+    "Ligue 1": "#091C3F",
+    "Champions League": "#0C7C46",
+  };
 
   return (
-    <>
-      <Paper 
-        elevation={0}
-        sx={{
-          borderRadius: 2,
-          border: "1px solid",
-          borderColor: "divider",
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
-        {loading && (
-          <LinearProgress 
-            sx={{ 
-              position: "absolute", 
-              top: 0, 
-              left: 0, 
-              right: 0,
-              height: 3,
-              '& .MuiLinearProgress-bar': {
-                backgroundColor: 'primary.main',
-              }
-            }} 
-          />
-        )}
+    <Fade in timeout={500}>
+      <Card elevation={2} sx={{ borderRadius: 2, overflow: "hidden" }}>
+        <CardContent sx={{ p: 0 }}>
+          {/* Table Header */}
+          <Box
+            sx={{
+              p: 3,
+              bgcolor: alpha(theme.palette.primary.main, 0.02),
+              borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <SoccerIcon color="primary" sx={{ fontSize: 32 }} />
+                <Box>
+                  <Typography variant="h5" fontWeight={700}>
+                    Matches Overview
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {matches.length} matches found • Showing{" "}
+                    {paginatedMatches.length} per page
+                  </Typography>
+                </Box>
+              </Box>
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Tooltip title="Filter">
+                  <IconButton
+                    sx={{
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      "&:hover": {
+                        bgcolor: alpha(theme.palette.primary.main, 0.2),
+                      },
+                    }}
+                  >
+                    <FilterIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Search">
+                  <IconButton
+                    sx={{
+                      bgcolor: alpha(theme.palette.info.main, 0.1),
+                      "&:hover": {
+                        bgcolor: alpha(theme.palette.info.main, 0.2),
+                      },
+                    }}
+                  >
+                    <SearchIcon />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </Box>
+          </Box>
 
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ 
-                backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.05),
-                '& th': {
-                  fontWeight: 600,
-                  color: "text.primary",
-                  borderBottom: "2px solid",
-                  borderColor: "divider",
-                  py: 2,
-                }
-              }}>
-                <TableCell sx={{ width: "30%" }}>Match</TableCell>
-                <TableCell>League</TableCell>
-                <TableCell>Date & Time</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Markets</TableCell>
-                <TableCell align="center" sx={{ width: "150px" }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            
-            <TableBody>
-              {matches.map((match, index) => {
-                const inBetslip = isMatchInBetslip(match.id);
-                const homeTeamName = match.home_team || match.homeTeam?.name || "Unknown";
-                const awayTeamName = match.away_team || match.awayTeam?.name || "Unknown";
-                const hasScore = match.home_score !== null && match.away_score !== null;
-
-                return (
-                  <Fade in={true} timeout={index * 100} key={match.id}>
-                    <TableRow
-                      hover
-                      sx={{
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        '&:hover': { 
-                          backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
-                          transform: "translateY(-1px)",
-                          boxShadow: 1
-                        },
-                        '&:not(:last-child)': {
-                          borderBottom: "1px solid",
-                          borderColor: "divider",
-                        }
-                      }}
-                      onClick={() => navigate(`/matches/${match.id}`)}
+          {/* Table Container */}
+          <TableContainer sx={{ maxHeight: 600 }}>
+            <Table stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <EnhancedTableHeadCell>
+                    <TableSortLabel
+                      active={orderBy === "match_date"}
+                      direction={orderBy === "match_date" ? order : "asc"}
+                      onClick={() => handleRequestSort("match_date")}
                     >
-                      {/* Match Column */}
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <TimeIcon fontSize="small" />
+                        Date & Time
+                      </Box>
+                    </TableSortLabel>
+                  </EnhancedTableHeadCell>
+                  <EnhancedTableHeadCell>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <TrophyIcon fontSize="small" />
+                      League
+                    </Box>
+                  </EnhancedTableHeadCell>
+                  <EnhancedTableHeadCell>Match</EnhancedTableHeadCell>
+                  <EnhancedTableHeadCell>Score</EnhancedTableHeadCell>
+                  <EnhancedTableHeadCell>Status</EnhancedTableHeadCell>
+                  <EnhancedTableHeadCell>Form</EnhancedTableHeadCell>
+                  <EnhancedTableHeadCell align="center">
+                    Actions
+                  </EnhancedTableHeadCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {paginatedMatches.map((match) => {
+                  const winner = getWinner(match);
+                  const homeForm = match.teamForms?.find(
+                    (f) => f.venue === "home"
+                  );
+                  const awayForm = match.teamForms?.find(
+                    (f) => f.venue === "away"
+                  );
+
+                  return (
+                    <StyledTableRow
+                      key={match.id}
+                      hover
+                      matchstatus={match.status?.toLowerCase()}
+                    >
                       <TableCell>
-                        <Box display="flex" alignItems="center" gap={2}>
-                          <AvatarGroup max={2}>
-                            <Avatar 
-                              sx={{ 
-                                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
-                                color: "primary.main",
+                        <Box>
+                          <Typography variant="body1" fontWeight={600}>
+                            {formatDate(match.match_date)}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatTime(match.match_time) || "Time TBD"}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        >
+                          <LeagueAvatar
+                            leaguecolor={leagueColors[match.league]}
+                            sx={{ bgcolor: leagueColors[match.league] }}
+                          >
+                            {match.league?.charAt(0) || "?"}
+                          </LeagueAvatar>
+                          <Typography variant="body2" fontWeight={500}>
+                            {match.league || "Unknown"}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 2 }}
+                        >
+                          <AvatarGroup max={2} spacing="small">
+                            <Avatar
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                color: theme.palette.primary.main,
                                 fontWeight: 600,
-                                width: 36,
-                                height: 36
+                                fontSize: "0.75rem",
                               }}
                             >
-                              {getTeamInitials(homeTeamName)}
+                              {getTeamInitials(match.home_team)}
                             </Avatar>
-                            <Avatar 
-                              sx={{ 
-                                bgcolor: (theme) => alpha(theme.palette.secondary.main, 0.1),
-                                color: "secondary.main",
+                            <Avatar
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                bgcolor: alpha(theme.palette.error.main, 0.1),
+                                color: theme.palette.error.main,
                                 fontWeight: 600,
-                                width: 36,
-                                height: 36
+                                fontSize: "0.75rem",
                               }}
                             >
-                              {getTeamInitials(awayTeamName)}
+                              {getTeamInitials(match.away_team)}
                             </Avatar>
                           </AvatarGroup>
-                          
                           <Box>
-                            <Typography variant="subtitle1" fontWeight={500}>
-                              {homeTeamName} <span style={{ color: '#666', margin: '0 8px' }}>vs</span> {awayTeamName}
+                            <Typography variant="body2" fontWeight={600}>
+                              {match.home_team}
                             </Typography>
-                            {hasScore && (
-                              <Typography 
-                                variant="h6" 
-                                fontWeight={700}
-                                color={getScoreColor(match.home_score, match.away_score)}
-                              >
-                                {match.home_score} - {match.away_score}
-                              </Typography>
-                            )}
-                            {match.venue && (
-                              <Typography variant="caption" color="text.secondary">
-                                {match.venue === "Home" ? "🏠 " : "⚽ "}{match.venue}
-                              </Typography>
-                            )}
+                            <Typography variant="body2" color="text.secondary">
+                              vs {match.away_team}
+                            </Typography>
                           </Box>
                         </Box>
                       </TableCell>
-
-                      {/* League Column */}
                       <TableCell>
-                        <Chip
-                          icon={getLeagueIcon(match.league)}
-                          label={match.league || "Unknown"}
-                          size="small"
-                          variant="outlined"
-                          sx={{
-                            borderRadius: 1,
-                            borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
-                            backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.05),
-                          }}
-                        />
-                      </TableCell>
-
-                      {/* Date & Time Column */}
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body1" fontWeight={500}>
-                            {formatDate(match.match_date)}
-                          </Typography>
-                          {match.match_time && (
-                            <Box display="flex" alignItems="center" gap={0.5}>
-                              <TimeIcon fontSize="small" sx={{ color: "text.secondary", fontSize: 16 }} />
-                              <Typography variant="body2" color="text.secondary">
-                                {match.match_time}
-                              </Typography>
-                            </Box>
-                          )}
-                        </Box>
-                      </TableCell>
-
-                      {/* Status Column */}
-                      <TableCell>
-                        <Chip
-                          icon={getStatusIcon(match.status)}
-                          label={match.status || "Scheduled"}
-                          color={getStatusColor(match.status)}
-                          size="small"
-                          sx={{
-                            fontWeight: 500,
-                            '& .MuiChip-icon': {
-                              color: 'inherit'
-                            }
-                          }}
-                        />
-                      </TableCell>
-
-                      {/* Markets Column */}
-                      <TableCell>
-                        <Box display="flex" alignItems="center" gap={1}>
+                        {match.home_score !== null &&
+                        match.away_score !== null ? (
+                          <ScoreContainer winner={winner}>
+                            <Typography
+                              variant="body1"
+                              fontWeight={700}
+                              sx={{
+                                color:
+                                  winner === "home"
+                                    ? theme.palette.primary.main
+                                    : winner === "away"
+                                      ? theme.palette.text.primary
+                                      : theme.palette.warning.main,
+                              }}
+                            >
+                              {match.home_score}
+                            </Typography>
+                            <Typography variant="body1" sx={{ mx: 0.5 }}>
+                              :
+                            </Typography>
+                            <Typography
+                              variant="body1"
+                              fontWeight={700}
+                              sx={{
+                                color:
+                                  winner === "away"
+                                    ? theme.palette.error.main
+                                    : winner === "home"
+                                      ? theme.palette.text.primary
+                                      : theme.palette.warning.main,
+                              }}
+                            >
+                              {match.away_score}
+                            </Typography>
+                          </ScoreContainer>
+                        ) : (
                           <Chip
-                            label={`${match.markets_count || 0}`}
+                            label="Not Played"
                             size="small"
-                            variant="filled"
+                            variant="outlined"
                             sx={{
-                              backgroundColor: (theme) => 
-                                (match.markets_count || 0) > 0 
-                                  ? alpha(theme.palette.success.main, 0.1)
-                                  : alpha(theme.palette.grey[500], 0.1),
-                              color: (match.markets_count || 0) > 0 ? "success.main" : "text.secondary",
-                              fontWeight: 600,
-                              minWidth: 32,
+                              color: theme.palette.text.secondary,
+                              borderColor: alpha(theme.palette.divider, 0.5),
                             }}
                           />
-                          <Typography variant="body2" color="text.secondary">
-                            markets
-                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <StatusChip
+                          size="small"
+                          status={match.status?.toLowerCase()}
+                          icon={getStatusIcon(match.status)}
+                          label={
+                            match.status?.charAt(0).toUpperCase() +
+                              match.status?.slice(1) || "Scheduled"
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: "flex", gap: 2 }}>
+                          <Box>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Home
+                            </Typography>
+                            {getFormIndicator(homeForm)}
+                          </Box>
+                          <Box>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Away
+                            </Typography>
+                            {getFormIndicator(awayForm)}
+                          </Box>
                         </Box>
                       </TableCell>
-
-                      {/* Actions Column */}
-                      <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                        <Box display="flex" justifyContent="center" gap={1}>
-                          <Tooltip title="View Details" arrow>
-                            <IconButton
+                      <TableCell align="center">
+                        <Box
+                          sx={{
+                            display: "flex",
+                            gap: 1,
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Tooltip title="View Details">
+                            <ActionButton
                               size="small"
-                              onClick={() => navigate(`/matches/${match.id}`)}
-                              sx={{
-                                backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.1),
-                                '&:hover': {
-                                  backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.2),
-                                }
-                              }}
+                              actiontype="view"
+                              onClick={() => handleViewAction(match)}
                             >
                               <ViewIcon fontSize="small" />
-                            </IconButton>
+                            </ActionButton>
                           </Tooltip>
-
-                          <AddToBetslipButton match={match} />
-
-                          <Tooltip title="Delete Match" arrow>
-                            <IconButton
+                          <Tooltip title="Edit Match">
+                            <ActionButton
                               size="small"
-                              onClick={(e) => handleDeleteClick(match.id, `${homeTeamName} vs ${awayTeamName}`, e)}
-                              sx={{
-                                backgroundColor: (theme) => alpha(theme.palette.error.main, 0.1),
-                                '&:hover': {
-                                  backgroundColor: (theme) => alpha(theme.palette.error.main, 0.2),
-                                }
-                              }}
+                              actiontype="edit"
+                              onClick={() => onEdit?.(match)}
+                            >
+                              <EditIcon fontSize="small" />
+                            </ActionButton>
+                          </Tooltip>
+                          <Tooltip title="Delete Match">
+                            <ActionButton
+                              size="small"
+                              actiontype="delete"
+                              onClick={() => onDelete?.(match)}
                             >
                               <DeleteIcon fontSize="small" />
-                            </IconButton>
+                            </ActionButton>
                           </Tooltip>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => handleClick(e, match)}
+                            sx={{
+                              bgcolor: alpha(theme.palette.grey[500], 0.1),
+                              "&:hover": {
+                                bgcolor: alpha(theme.palette.grey[500], 0.2),
+                              },
+                            }}
+                          >
+                            <MoreVertIcon fontSize="small" />
+                          </IconButton>
                         </Box>
                       </TableCell>
-                    </TableRow>
-                  </Fade>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+                    </StyledTableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
 
-      {/* Delete Confirmation Dialog */}
-      {deleteConfirm && (
-        <Alert 
-          severity="warning"
-          sx={{
-            position: 'fixed',
-            top: 20,
-            right: 20,
-            zIndex: 1300,
-            boxShadow: 3,
-            minWidth: 300,
-            maxWidth: 400,
-            animation: 'slideIn 0.3s ease-out',
-            '@keyframes slideIn': {
-              '0%': { transform: 'translateX(100%)', opacity: 0 },
-              '100%': { transform: 'translateX(0)', opacity: 1 }
-            }
+          {/* Pagination */}
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            component="div"
+            count={matches.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            sx={{
+              borderTop: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+              "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows":
+                {
+                  fontWeight: 500,
+                },
+            }}
+          />
+        </CardContent>
+
+        {/* Context Menu */}
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl)}
+          onClose={handleClose}
+          TransitionComponent={Fade}
+          PaperProps={{
+            elevation: 3,
+            sx: {
+              borderRadius: 2,
+              minWidth: 200,
+              mt: 1,
+            },
           }}
-          action={
-            <>
-              <Button 
-                color="inherit" 
-                size="small" 
-                onClick={handleConfirmDelete}
-                sx={{ mr: 1 }}
-              >
-                Delete
-              </Button>
-              <Button 
-                color="inherit" 
-                size="small" 
-                onClick={handleCancelDelete}
-              >
-                Cancel
-              </Button>
-            </>
-          }
         >
-          <Typography variant="subtitle2" gutterBottom>
-            Delete match?
-          </Typography>
-          <Typography variant="body2">
-            Are you sure you want to delete "{deleteConfirm.name}"? This action cannot be undone.
-          </Typography>
-        </Alert>
-      )}
-
-      {/* Delete Success Snackbar */}
-      <Snackbar
-        open={showDeleteSuccess}
-        autoHideDuration={4000}
-        onClose={() => setShowDeleteSuccess(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert 
-          onClose={() => setShowDeleteSuccess(false)} 
-          severity="success" 
-          icon={<CheckIcon />}
-          sx={{ width: '100%' }}
-        >
-          <Typography variant="subtitle2">
-            Match deleted successfully!
-          </Typography>
-          <Typography variant="body2">
-            "{deletedMatchName}" has been removed
-          </Typography>
-        </Alert>
-      </Snackbar>
-    </>
+          <MenuItem
+            onClick={() => {
+              handleViewAction(selectedMatch);
+              handleClose();
+            }}
+            sx={{
+              color: theme.palette.info.main,
+              "&:hover": { bgcolor: alpha(theme.palette.info.main, 0.1) },
+            }}
+          >
+            <ViewIcon sx={{ mr: 2, fontSize: 20 }} />
+            View Details
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onEdit?.(selectedMatch);
+              handleClose();
+            }}
+            sx={{
+              color: theme.palette.warning.main,
+              "&:hover": { bgcolor: alpha(theme.palette.warning.main, 0.1) },
+            }}
+          >
+            <EditIcon sx={{ mr: 2, fontSize: 20 }} />
+            Edit Match
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onDelete?.(selectedMatch);
+              handleClose();
+            }}
+            sx={{
+              color: theme.palette.error.main,
+              "&:hover": { bgcolor: alpha(theme.palette.error.main, 0.1) },
+            }}
+          >
+            <DeleteIcon sx={{ mr: 2, fontSize: 20 }} />
+            Delete Match
+          </MenuItem>
+        </Menu>
+      </Card>
+    </Fade>
   );
 };
 

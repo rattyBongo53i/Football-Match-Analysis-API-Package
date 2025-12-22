@@ -9,7 +9,7 @@ import {
   Button,
   IconButton,
   LinearProgress,
-    Divider,
+  Divider,
   Grid,
 } from "@mui/material";
 import {
@@ -59,6 +59,32 @@ const SlipCard = ({ slip, onView, onDelete }) => {
       ? Math.min((slip.matches_count / 10) * 100, 100)
       : 0;
 
+  // Handler for the View button click
+  const handleViewClick = (e) => {
+    e.stopPropagation(); // Prevent card click event if any
+    console.log("SlipCard view button clicked for slip:", slip.id);
+    if (onView && typeof onView === "function") {
+      onView();
+    } else {
+      console.error("onView is not a function or not provided");
+    }
+  };
+
+  // Handler for the Delete button click
+  const handleDeleteClick = (e) => {
+    e.stopPropagation(); // Prevent card click event if any
+    if (onDelete && typeof onDelete === "function") {
+      onDelete();
+    }
+  };
+
+  // Optional: Handle clicking the entire card
+  const handleCardClick = () => {
+    if (onView && typeof onView === "function") {
+      onView();
+    }
+  };
+
   return (
     <Card
       sx={{
@@ -66,7 +92,14 @@ const SlipCard = ({ slip, onView, onDelete }) => {
         display: "flex",
         flexDirection: "column",
         borderRadius: 2,
+        cursor: "pointer", // Makes it look clickable
+        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        "&:hover": {
+          transform: "translateY(-4px)",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+        },
       }}
+      onClick={handleCardClick}
     >
       <CardContent sx={{ flexGrow: 1 }}>
         <Box
@@ -167,20 +200,28 @@ const SlipCard = ({ slip, onView, onDelete }) => {
         <Button
           variant="contained"
           startIcon={<ViewIcon />}
-          onClick={onView}
+          onClick={handleViewClick}
           fullWidth
-          sx={{ borderRadius: 2 }}
+          sx={{
+            borderRadius: 2,
+            "&:hover": {
+              backgroundColor: "primary.dark",
+            },
+          }}
         >
           View Details
         </Button>
-        <IconButton
-          onClick={onDelete}
-          color="error"
-          sx={{ ml: 1 }}
-          size="small"
-        >
-          <DeleteIcon />
-        </IconButton>
+        {onDelete && (
+          <IconButton
+            onClick={handleDeleteClick}
+            color="error"
+            sx={{ ml: 1 }}
+            size="small"
+            aria-label="delete slip"
+          >
+            <DeleteIcon />
+          </IconButton>
+        )}
       </CardActions>
     </Card>
   );

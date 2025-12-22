@@ -13,8 +13,8 @@ from ..utils import MathUtils, EngineHelpers
 class SlipBuilder:
     """
     The main orchestrator for the Game Engine.
-    It transforms raw match data from Laravel into a structured portfolio
-    of 100+ optimized and hedged betting slips.
+    Transforms raw match data into an optimized portfolio of the top 50 
+    highest-quality betting slips from a pool of 100 generated variations.
     """
 
     def __init__(self):
@@ -25,8 +25,7 @@ class SlipBuilder:
 
     def generate(self, payload: Any) -> List[Dict[str, Any]]:
         """
-        Executes the full analytical pipeline.
-        Note: Accesses data via payload.master_slip based on our MasterSlipRequest schema.
+        Executes the analytical pipeline and selects the top 50 slips.
         """
         # Unwrap the Laravel payload
         data = payload.master_slip
@@ -46,36 +45,27 @@ class SlipBuilder:
                 "base_odds": match.selected_market.odds
             })
 
-        # --- 2. PORTFOLIO GENERATION (100 variations) ---
-        raw_slips = []
+        # --- 2. CANDIDATE POOL GENERATION (100 variations) ---
+        candidate_pool = []
         for i in range(100):
             selected_legs = []
             cumulative_odds = 1.0
-
-            # Use helper for consistent ID generation
             slip_id = EngineHelpers.generate_unique_id(prefix="SLIP")
 
             for sim in match_sims:
                 m = sim["match"]
 
-                # Logic: Use the 'Selected Market' for 30% of slips (Core Strategy)
-                # Use 'Full Markets' for 70% of slips (Hedging Strategy)
+                # Strategy: Mix primary selections with market hedges
                 if i < 30:
                     market_obj = m.selected_market
                     market_name = market_obj.market_type
                     selection_label = market_obj.selection
                     odds = market_obj.odds
                 else:
-                    # Pick a different market from the full list to create coverage
-                    # We cycle through full_markets based on index 'i'
                     market_idx = (i % len(m.full_markets))
                     alt_market = m.full_markets[market_idx]
-
-                    # Pick the first option in that market
                     opt = alt_market.options[0]
                     market_name = alt_market.market_name
-
-                    # Dynamic label based on what's available (Score, Handicap, or Selection)
                     selection_label = opt.selection or opt.score or opt.handicap or "N/A"
                     odds = opt.odds
 
@@ -87,31 +77,33 @@ class SlipBuilder:
                 })
                 cumulative_odds *= odds
 
-            raw_slips.append({
+            candidate_pool.append({
                 "slip_id": slip_id,
                 "legs": selected_legs,
                 "total_odds": round(cumulative_odds, 2),
-                # Score the slip based on the combined simulation results
                 "confidence_score": self.scoring.calculate_confidence_score(match_sims)
             })
 
-        # --- 3. STAKE DISTRIBUTION (COVERAGE) ---
-        confidences = [s["confidence_score"] for s in raw_slips]
+        # --- 3. HIERARCHICAL SELECTION (Top 50) ---
+        # We rank the 100 slips first to find the "Best of the Best"
+        ranked_pool = self.scoring.rank_slips(candidate_pool)
+        top_50_slips = ranked_pool[:50]
+
+        # --- 4. STAKE DISTRIBUTION (Optimized for the 50) ---
+        # We redistribute the total stake across only the top 50 survivors
+        confidences = [s["confidence_score"] for s in top_50_slips]
         distributed_stakes = CoverageOptimizer.distribute_stake(
             total_stake=data.stake,
-            num_slips=100,
+            num_slips=50,
             confidence_scores=confidences
         )
 
-        # --- 4. FINAL ASSEMBLY & RANKING ---
-        final_slips = []
-        for i, slip in enumerate(raw_slips):
+        # --- 5. FINAL ASSEMBLY ---
+        final_portfolio = []
+        for i, slip in enumerate(top_50_slips):
             slip["stake"] = EngineHelpers.format_money(distributed_stakes[i])
             slip["possible_return"] = EngineHelpers.format_money(slip["stake"] * slip["total_odds"])
-
-            # Assign risk category based on confidence
             slip["risk_level"] = self.scoring.assign_risk_category(slip["confidence_score"])
-            final_slips.append(slip)
+            final_portfolio.append(slip)
 
-        # Return sorted by confidence (highest first)
-        return self.scoring.rank_slips(final_slips)
+        return final_portfolio

@@ -29,7 +29,7 @@ export default function Sidebar() {
       icon: <SportsSoccer />,
     },
     {
-      path: "/slip/new",
+      path: "/slip/1",
       text: "Master Slip",
       icon: <ReceiptLong />,
     },
@@ -37,6 +37,11 @@ export default function Sidebar() {
       path: "/slips",
       text: "All Slips",
       icon: <ListAlt />,
+    },
+    {
+      path: "generatedslips/2/slips",
+      text: "Generated Slips",
+      icon: <ReceiptLong />,
     },
   ];
 
@@ -100,7 +105,7 @@ export default function Sidebar() {
               }}
             >
               <Dashboard color="primary" />
-              Betting System
+              ML Analytics
             </Typography>
             <Typography
               variant="caption"

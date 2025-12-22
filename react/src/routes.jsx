@@ -28,7 +28,7 @@ const router = createBrowserRouter([
       },
       { path: "slips", element: <SlipsPage /> },
       { path: "slips/create", element: <SlipsPage /> },
-      { path: "slip/:id", element: <SlipDetailPage /> },
+      { path: "slips/:id", element: <SlipDetailPage /> },
       { path: "*", element: <NotFound /> },
       // { path: "slips/master", element: <SlipMaster /> }, /
     ],

@@ -208,6 +208,37 @@ const processInBatches = async (items, processor, batchSize = 5) => {
   return { results, errors };
 };
 
+export const betslipAPI = {
+  createSlip: (data) =>
+    withRetry(() =>
+      createApiClient(createCancelToken().token).post(
+        `${ENDPOINTS.SLIPS}/create`,
+        data
+      )
+    ),
+
+  getActiveSlips: () =>
+    withRetry(() =>
+      createApiClient(createCancelToken().token).get(
+        `${ENDPOINTS.SLIPS}/active-master-slips`
+      )
+    ),
+
+  addMatchToSlip: (slipId, matchData) =>
+    withRetry(() =>
+      createApiClient(createCancelToken().token).post(
+        `${ENDPOINTS.SLIPS}/${slipId}/add-match`,
+        matchData
+      )
+    ),
+
+  removeMatchFromSlip: (slipId, matchId) =>
+    withRetry(() =>
+      createApiClient(createCancelToken().token).delete(
+        `${ENDPOINTS.SLIPS}/${slipId}/remove-match/${matchId}`
+      )
+    ),
+};
 // Core API methods - simplified and focused
 export const matchAPI = {
   getMatches: (params = {}, forceRefresh = false) => 
@@ -325,6 +356,7 @@ export const api = {
   matches: matchAPI,
   teams: teamAPI,
   slips: slipAPI,
+  betslips: betslipAPI, // Add thi
   generator: generatorAPI,
   health: { check: checkHealth },
   utils: { clearCache },

@@ -1144,6 +1144,66 @@ class SlipController extends Controller
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+
+        /**
+     * Get all active (draft) master slips.
+     *
+     * This endpoint fetches all master slips with status 'draft',
+     * including their relationships for comprehensive data.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function showActiveSlip()
+    {
+        try {
+            // Load all draft slips with relationships
+            $activeSlips = MasterSlip::where('status', 'draft')
+                ->with(['matches', 'slipMatches', 'generatedSlips'])
+                ->get();
+
+            // Format data for each slip
+            $formattedSlips = $activeSlips->map(function ($slip) {
+                return [
+                    'id' => $slip->id,
+                    'name' => $slip->name ?? 'Unnamed Slip',
+                    'stake' => (float) $slip->stake,
+                    'currency' => $slip->currency ?? 'EUR',
+                    'status' => $slip->status ?? 'draft',
+                    'engine_status' => $slip->engine_status ?? 'pending',
+                    'analysis_quality' => $slip->analysis_quality ?? 'medium',
+                    'notes' => $slip->notes,
+                    'slip_data' => $slip->slip_data ?? [],
+                    'created_at' => $slip->created_at?->toISOString(),
+                    'updated_at' => $slip->updated_at?->toISOString(),
+                    'processing_started_at' => $slip->processing_started_at?->toISOString(),
+                    'processing_completed_at' => $slip->processing_completed_at?->toISOString(),
+                    'total_odds' => (float) $slip->total_odds,
+                    'estimated_payout' => (float) $slip->estimated_payout,
+                    'matches_count' => $slip->matches->count(),
+                    'generated_slips_count' => $slip->generatedSlips->count(),
+                    'alternative_slips_count' => $slip->alternative_slips_count,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Active slips retrieved successfully',
+                'data' => $formattedSlips,
+                'count' => $formattedSlips->count()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve active slips: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve active slips',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+
+
 }
 
 /***

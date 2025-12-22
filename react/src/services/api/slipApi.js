@@ -6,8 +6,17 @@ const slipApi = {
   // Get master slips (user's slips)
   getMasterSlips: async () => {
     try {
-      const response = await axios.get(`${API_URL}/master-slips`);
-      return response.data;
+      const response = await axios.get(`${API_URL}/all-master-slips`);
+      // Ensure we always return an array
+      return Array.isArray(response.data)
+        ? response.data
+        : response.data.data
+          ? response.data.data
+          : response.data.slips
+            ? response.data.slips
+            : response.data.results
+              ? response.data.results
+              : [];
     } catch (error) {
       console.error("Error fetching master slips:", error);
       throw error;
@@ -17,7 +26,7 @@ const slipApi = {
   // Get single master slip details
   getMasterSlip: async (id) => {
     try {
-      const response = await axios.get(`${API_URL}/da-master-slips/${id}`);
+      const response = await axios.get(`${API_URL}/master-slips/${id}`);
       return response.data;
     } catch (error) {
       console.error("Error fetching master slip:", error);
@@ -32,6 +41,17 @@ const slipApi = {
       return response.data;
     } catch (error) {
       console.error("Error creating slip:", error);
+      throw error;
+    }
+  },
+
+  // getAvailableMatches
+  getAvailableMatches: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/matches`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching matches:", error);
       throw error;
     }
   },
@@ -130,6 +150,54 @@ const slipApi = {
       console.error("Error running slip analysis:", error);
       throw error;
     }
+  },
+
+  // FILTER FUNCTION - Add this new function
+  filterSlips: (slips, criteria) => {
+    // Make sure slips is an array
+    if (!Array.isArray(slips)) {
+      console.warn("filterSlips called with non-array:", slips);
+      return [];
+    }
+
+    return slips.filter((slip) => {
+      // Filter by tab criteria
+      if (criteria.activeTab === 1) {
+        // High Confidence tab
+        return slip.confidence_score > 75;
+      }
+
+      // Add more filter criteria as needed
+      if (criteria.status) {
+        return slip.status === criteria.status;
+      }
+
+      // All tab - return all slips
+      return true;
+    });
+  },
+
+  // Additional utility function for sorting
+  sortSlips: (slips, sortBy = "created_at", order = "desc") => {
+    if (!Array.isArray(slips)) {
+      console.warn("sortSlips called with non-array:", slips);
+      return [];
+    }
+
+    return [...slips].sort((a, b) => {
+      let valA = a[sortBy];
+      let valB = b[sortBy];
+
+      // Handle dates
+      if (sortBy.includes("date") || sortBy.includes("at")) {
+        valA = new Date(valA).getTime();
+        valB = new Date(valB).getTime();
+      }
+
+      if (valA < valB) return order === "asc" ? -1 : 1;
+      if (valA > valB) return order === "asc" ? 1 : -1;
+      return 0;
+    });
   },
 };
 

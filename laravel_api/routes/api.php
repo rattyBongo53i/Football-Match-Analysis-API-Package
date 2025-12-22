@@ -77,7 +77,7 @@ Route::prefix('teams')->group(function () {
 });
 
     // Team Focrms (RESTful)
-Route::apiResource('team-forms', TeamFormController::class)->except(['show', 'destroy']); // No show/destroy in frontend
+// Route::apiResource('team-forms', TeamFormController::class)->except(['show', 'destroy']); // No show/destroy in frontend
 Route::post('team-forms/calculate', [TeamFormController::class, 'calculate']);
 
 
@@ -129,7 +129,7 @@ Route::group(['prefix' => 'head-to-head'], function () {
 
 // Slips (RESTful + customs)
 Route::post('/master-slips', [MasterSlipController::class, 'store']);
-Route::apiResource('slips', SlipController::class);
+// Route::apiResource('slips', SlipController::class);
 Route::post('slips/master', [SlipController::class, 'createMaster']);
 Route::post('slips/{slipId}/matches', [SlipController::class, 'addMatch']);
 
@@ -140,7 +140,7 @@ Route::get('generator/jobs', [GeneratorController::class, 'listJobs']);
 Route::post('generator/{jobId}/cancel', [GeneratorController::class, 'cancel']);
 
 // Markets (RESTful)
-Route::apiResource('markets', MarketController::class);
+// Route::apiResource('markets', MarketController::class);
 Route::get('markets/{marketId}/outcomes', [MarketController::class, 'outcomes']);
 
 // Predictions (if implemented, add resource)
@@ -197,7 +197,7 @@ Route::get('/slip/{generatedSlipId}', [SlipController::class, 'getSlipDetail']);
 Route::post('/slips/create', [SlipController::class, 'createSlip']);
 Route::post('/slips/{slip}/add-match', [SlipController::class, 'addMatchToSlip']);
 Route::delete('/slips/{slip}/remove-match/{matchId}', [SlipController::class, 'removeMatchFromSlip']);
-Route::get('/master-slips', [SlipController::class, 'getMasterSlips']);
+Route::get('/all-master-slips', [SlipController::class, 'getMasterSlips']);
 Route::get('/master-slips/{id}', [SlipController::class, 'DagetMasterSlip']);
 
 Route::get('/da-master-slips/{id}', [SlipController::class, 'DagetSlipDetail']);
@@ -205,6 +205,8 @@ Route::get('/slips/{id}/matches', [SlipController::class, 'getSlipMatches']);
 Route::get('/slips/{id}/generated', [SlipController::class, 'DagetGeneratedSlips']);
 Route::post('/slips/{id}/analyze', [SlipController::class, 'analyzeSlip']);
 Route::put('/single-slips/{id}', [SlipController::class, 'updateSlip']); // For editing
+// get active slip
+Route::get('/slips/active-master-slips', [SlipController::class, 'showActiveSlip']);
 
 
     // Market endpoints
