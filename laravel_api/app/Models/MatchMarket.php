@@ -24,11 +24,11 @@ class MatchMarket extends Model
     // Relationships
     public function match()
     {
-        return $this->belongsTo(MatchModel::class);
+        return $this->belongsTo(MatchModel::class, 'match_id', 'id');
     }
 
     public function market()
     {
-        return $this->belongsTo(Market::class);
+        return $this->belongsTo(Market::class, 'market_id', 'id');
     }
 }

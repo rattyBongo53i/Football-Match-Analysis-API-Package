@@ -57,7 +57,11 @@ Route::prefix('matches')->group(function () {
     Route::get('/search', [MatchController::class, 'searchTeams']);
     // tdb
     Route::get('/{id}/stats', [MatchController::class, 'stats']);
-    });
+    // getMatchForBetslip
+});
+    // getMatchesForBetslip
+Route::get('/getMatches-betslip', [MatchController::class, 'getMatchesAllForBetslip']);
+Route::get('/single-betslip/{id}', [MatchController::class, 'getMatchForBetslip']);
 
 Route::post('/matches/{id}/generate-predictions', [MatchController::class, 'generatePredictions'])
     ->name('matches.generate-predictions');
@@ -195,19 +199,21 @@ Route::prefix('master-slips')->group(function () {
 Route::get('/slip/{generatedSlipId}', [SlipController::class, 'getSlipDetail']);
 
 Route::post('/slips/create', [SlipController::class, 'createSlip']);
-Route::post('/slips/{slip}/add-match', [SlipController::class, 'addMatchToSlip']);
+Route::post('/slips/{slip}/add-match', [SlipController::class, 'addMatchesToSlip']);
 Route::delete('/slips/{slip}/remove-match/{matchId}', [SlipController::class, 'removeMatchFromSlip']);
 Route::get('/all-master-slips', [SlipController::class, 'getMasterSlips']);
 Route::get('/master-slips/{id}', [SlipController::class, 'DagetMasterSlip']);
 
-Route::get('/da-master-slips/{id}', [SlipController::class, 'DagetSlipDetail']);
+Route::get('/da-master-slips/{id}', [SlipController::class, 'DagetMasterSlipDetail']);
 Route::get('/slips/{id}/matches', [SlipController::class, 'getSlipMatches']);
 Route::get('/slips/{id}/generated', [SlipController::class, 'DagetGeneratedSlips']);
 Route::post('/slips/{id}/analyze', [SlipController::class, 'analyzeSlip']);
-Route::put('/single-slips/{id}', [SlipController::class, 'updateSlip']); // For editing
+Route::put('/single-slips/{id}', [SlipController::class, 'updateMasterSlip']); // For editing
+Route::get('/slips/{id}/dashboard', [SlipController::class, 'getDashboardSlip']);
 // get active slip
 Route::get('/slips/active-master-slips', [SlipController::class, 'showActiveSlip']);
-
+//addMatchToMasterSlip
+Route::post('/slips/{id}/add-match', [SlipController::class, 'addMatchToMasterSlip']);
 
     // Market endpoints
     Route::get('markets', [MarketController::class, 'index']);

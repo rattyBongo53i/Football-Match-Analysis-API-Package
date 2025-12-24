@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 
-class MasterSlipMatch extends Model
+class MasterSlipMatch extends Pivot  // Changed from Model to Pivot
 {
-    //
     protected $table = 'master_slip_matches';
+
+    // Add incrementing if you want auto-increment IDs in pivot table
+    public $incrementing = true;
 
     protected $fillable = [
         'master_slip_id',
@@ -24,7 +27,7 @@ class MasterSlipMatch extends Model
         'analysis' => 'array',
         'selected_market' => 'array',
         'markets' => 'array',
-        'odds' => 'decimal:2',
+        'odds' => 'float',
         'match_data' => 'array'
     ];
 
@@ -32,16 +35,18 @@ class MasterSlipMatch extends Model
 
     public function matchModel()
     {
-        return $this->belongsTo(MatchModel::class, 'match_id');
+        return $this->belongsTo(MatchModel::class, 'match_id', 'id');
+        
     }
 
     public function masterSlip()
     {
-        return $this->belongsTo(MasterSlip::class);
+        // return $this->belongsTo(MasterSlip::class);
+        return $this->belongsTo(MasterSlip::class, 'master_slip_id', 'id');
     }
 
     public function match()
     {
-        return $this->belongsTo(MatchModel::class, 'match_id');
+        return $this->belongsTo(MatchModel::class, 'match_id', 'id');
     }
 }

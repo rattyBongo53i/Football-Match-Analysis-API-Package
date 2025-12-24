@@ -13,6 +13,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use Carbon\Carbon;
 use App\Models\MatchModel;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 
 /**
@@ -812,6 +813,70 @@ class SlipController extends Controller
         }
     }
 
+
+    // In your SlipController.php
+    public function getSlipAnalysis($id)
+    {
+        try {
+            $masterSlip = MasterSlip::with([
+                'matches' => function ($query) {
+                    $query->with(['markets', 'analysis']);
+                },
+                'slipMatches',
+                'generatedSlips' => function ($query) {
+                    $query->orderBy('confidence_score', 'desc')->take(5);
+                },
+                'user'
+            ])->find($id);
+
+            if (!$masterSlip) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Slip not found'
+                ], 404);
+            }
+
+            // Calculate comprehensive analytics
+            $analytics = $this->calculateSlipAnalytics($masterSlip);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Slip analysis retrieved successfully',
+                'data' => [
+                    'slip' => $masterSlip,
+                    'analytics' => $analytics,
+                    'recommendations' => $this->generateRecommendations($masterSlip, $analytics),
+                    'historical_performance' => $this->getHistoricalPerformance($masterSlip->user_id),
+                    'similar_slips' => $this->getSimilarSlips($masterSlip)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to get slip analysis: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve slip analysis',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    private function calculateSlipAnalytics($masterSlip)
+    {
+        // Implement comprehensive analytics calculation
+        // This should include: confidence scores, risk assessment,
+        // market distribution, league analysis, odds analysis, etc.
+        return [
+            'confidence_score' => $this->calculateConfidenceScore($masterSlip),
+            'risk_level' => $this->calculateRiskLevel($masterSlip),
+            'market_distribution' => $this->getMarketDistribution($masterSlip),
+            'league_distribution' => $this->getLeagueDistribution($masterSlip),
+            'odds_analysis' => $this->analyzeOdds($masterSlip),
+            'profitability_metrics' => $this->calculateProfitability($masterSlip),
+            // ... more analytics
+        ];
+    }
+
     public function DagetGeneratedSlips($id)
     {
         try {
@@ -918,18 +983,11 @@ class SlipController extends Controller
     /**
      * Get slip details with matches
      */
-    public function DagetSlipDetail($id)
+    public function DagetMasterSlipDetail($id)
     {
         try {
-            // This could be for a specific slip (alternative/generated slip)
-            // If you have a GeneratedSlip model, use that
-            // For now, assuming it's getting master slip details
-            $masterSlip = MasterSlip::with([
-                'matches.markets',
-                'slipMatches',
-                'generatedSlips',
-                'user'
-            ])->find($id);
+            // Try loading relationships separately to isolate the issue
+            $masterSlip = MasterSlip::find($id);
 
             if (!$masterSlip) {
                 return response()->json([
@@ -938,10 +996,25 @@ class SlipController extends Controller
                 ], 404);
             }
 
-            // Calculate some statistics
+            // Load relationships one by one to find which one is causing the issue
+            $masterSlip->load([
+                'matches' => function ($query) {
+                    $query->with('markets');
+                }
+            ]);
+
+            // Try loading slipMatches separately with proper constraints
+            $slipMatches = $masterSlip->slipMatches()->get();
+
+            // Load other relationships
+            $masterSlip->load(['generatedSlips', 'user']);
+
+            // Calculate statistics
             $matches = $masterSlip->matches;
             $totalOdds = 1.0;
-            foreach ($masterSlip->slipMatches as $slipMatch) {
+
+            // Use the separately loaded slipMatches
+            foreach ($slipMatches as $slipMatch) {
                 if ($slipMatch->odds) {
                     $totalOdds *= (float) $slipMatch->odds;
                 }
@@ -950,8 +1023,9 @@ class SlipController extends Controller
             $estimatedPayout = $masterSlip->stake * $totalOdds;
 
             // Get match details with their pivot data
-            $matchDetails = $matches->map(function ($match) use ($masterSlip) {
-                $slipMatch = $masterSlip->slipMatches->firstWhere('match_id', $match->id);
+            $matchDetails = $matches->map(function ($match) use ($slipMatches) {
+                // Find the slip match for this match
+                $slipMatch = $slipMatches->firstWhere('match_id', $match->id);
 
                 return [
                     'match_id' => $match->id,
@@ -962,6 +1036,7 @@ class SlipController extends Controller
                     'status' => $match->status,
                     'selection' => $slipMatch->selection ?? null,
                     'market' => $slipMatch->market ?? null,
+                    'market_name' => $slipMatch->market_name ?? null,
                     'odds' => $slipMatch->odds ? (float) $slipMatch->odds : null,
                     'prediction' => $match->analysis_prediction ?? null,
                     'home_win_probability' => $match->analysis_home_win_probability ?? null,
@@ -1016,6 +1091,7 @@ class SlipController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Failed to get slip detail: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
 
             return response()->json([
                 'success' => false,
@@ -1072,41 +1148,217 @@ class SlipController extends Controller
         }
     }
 
+          /**
+     * Add a single match to an existing MasterSlip.
+     *
+     * This endpoint allows adding one match selection to a master slip.
+     * It validates the input, creates a pivot record in master_slip_matches,
+     * and optionally recalculates total odds and payout.
+     *
+     * @param Request $request
+     * @param string $masterSlipId The ID of the MasterSlip
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function addMatchToMasterSlip(Request $request, string $masterSlipId)
+    {
+        try {
+            // Find the MasterSlip or return 404
+            $masterSlip = MasterSlip::findOrFail($masterSlipId);
+
+            // Validate incoming match data
+            $validated = $request->validate([
+                'match_id'   => 'required|integer|exists:matches,id',
+                'market'     => 'required|string|max:100',
+                'selection'  => 'required|string|max:100',
+                'odds'       => 'required|numeric|min:1',
+                'match_data' => 'nullable|array', // Optional extra data (e.g., market outcomes)
+            ]);
+
+            // Prevent duplicate match in the same slip
+            $exists = $masterSlip->matches()->where('match_id', $validated['match_id'])->exists();
+            if ($exists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This match is already added to the slip.',
+                ], 422);
+            }
+
+            // Create the pivot record
+            $masterSlip->matches()->attach($validated['match_id'], [
+                'market'     => $validated['market'],
+                'selection'  => $validated['selection'],
+                'odds'       => $validated['odds'],
+                'match_data' => $validated['match_data'] ?? [],
+            ]);
+
+            // Optional: Recalculate total odds and estimated payout
+            // This is a simple product of all odds — adjust if your logic differs
+            $allOdds = $masterSlip->matches()->pluck('pivot.odds')->toArray();
+            $totalOdds = array_product($allOdds) ?: 1.0;
+
+            $masterSlip->update([
+                'total_odds'        => round($totalOdds, 4),
+                'estimated_payout'  => round($totalOdds * $masterSlip->stake, 2),
+            ]);
+
+            // Reload fresh data with relations
+            $masterSlip->load('matches');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Match added to slip successfully',
+                'data' => [
+                    'master_slip' => $masterSlip,
+                    'added_match' => [
+                        'match_id'   => $validated['match_id'],
+                        'market'     => $validated['market'],
+                        'selection'  => $validated['selection'],
+                        'odds'       => $validated['odds'],
+                    ]
+                ]
+            ], 200);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Master slip not found',
+            ], 404);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors'  => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Failed to add match to slip', [
+                'master_slip_id' => $masterSlipId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to add match to slip',
+                'error'   => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error',
+            ], 500);
+        }
+    }
+
     /**
      * Update an existing master slip.
      *
      * This endpoint updates the details of a master slip, such as name, stake, notes, etc.
      * It returns the updated slip information.
+
      *
      * @param Request $request
      * @param string $id The UUID or ID of the master slip to update
      * @return \Illuminate\Http\JsonResponse
      */
-    public function updateSlip(Request $request, string $id)
+          /**
+     * Unified update endpoint for MasterSlip.
+     *
+     * This method intelligently handles:
+     * - Updating slip metadata (name, stake, currency, notes)
+     * - Adding new matches to the slip
+     * - Both operations in a single request IF both data types are present
+     *
+     * It preserves the exact behavior of the previous two separate functions
+     * while consolidating them into one clean, atomic endpoint.
+     *
+
+     */
+    public function updateMasterSlip(Request $request, string $id)
     {
         try {
             $masterSlip = MasterSlip::findOrFail($id);
 
-            // Validate request data
-            $validated = $request->validate([
-                'name' => 'string|max:255',
-                'stake' => 'numeric|min:0',
-                'currency' => 'string|max:3',
-                'notes' => 'nullable|string',
-                // Add more fields as needed based on model
-            ]);
+            // Separate validation rules for different data types
+            $slipRules = [
+                'name'     => 'sometimes|string|max:255',
+                'stake'    => 'sometimes|numeric|min:0',
+                'currency' => 'sometimes|string|max:3',
+                'notes'    => 'nullable|string',
+            ];
 
-            // Update the master slip
-            $masterSlip->update($validated);
+            $matchRules = [
+                'match_id'   => 'required|integer|exists:matches,id',
+                'market'     => 'required|string|max:100',
+                'selection'  => 'required|string|max:100',
+                'odds'       => 'required|numeric|min:1',
+                'match_data' => 'nullable|array',
+            ];
 
+            $hasSlipData = $request->hasAny(['name', 'stake', 'currency', 'notes']);
+            $hasMatchData = $request->has('match_id');
+
+            // If neither type of data is present, return validation error
+            if (!$hasSlipData && !$hasMatchData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No valid data provided. Must include slip fields (name, stake, etc.) or match data.',
+                ], 422);
+            }
+
+            DB::beginTransaction();
+
+            // 1. Handle slip-level updates (if present)
+            if ($hasSlipData) {
+                $slipValidated = $request->validate($slipRules);
+                $masterSlip->update($slipValidated);
+            }
+
+            // 2. Handle match addition (if present)
+            $addedMatch = null;
+            if ($hasMatchData) {
+                $matchValidated = $request->validate($matchRules);
+
+                // Prevent duplicate match using the model's relationship
+                $exists = $masterSlip->matches()->where('match_id', $matchValidated['match_id'])->exists();
+                if ($exists) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This match is already in the slip.',
+                    ], 422);
+                }
+
+                // Attach match using the model's belongsToMany relationship
+                $masterSlip->matches()->attach($matchValidated['match_id'], [
+                    'market'     => $matchValidated['market'],
+                    'selection'  => $matchValidated['selection'],
+                    'odds'       => $matchValidated['odds'],
+                    'match_data' => $matchValidated['match_data'] ?? [],
+                ]);
+
+                $addedMatch = [
+                    'match_id'  => $matchValidated['match_id'],
+                    'market'    => $matchValidated['market'],
+                    'selection' => $matchValidated['selection'],
+                    'odds'      => $matchValidated['odds'],
+                ];
+
+                // Recalculate total odds and payout using model's relationship
+                $allOdds = $masterSlip->matches()->pluck('pivot.odds')->toArray();
+                $totalOdds = $allOdds ? array_product($allOdds) : 1.0;
+
+                $masterSlip->update([
+                    'total_odds'       => round($totalOdds, 4),
+                    'estimated_payout' => round($totalOdds * $masterSlip->stake, 2),
+                ]);
+            }
+
+            // Refresh model with latest data
             $masterSlip->refresh();
-
-            // Reload with relations for fresh data
             $masterSlip->load(['matches', 'slipMatches', 'generatedSlips']);
+
+            DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Slip updated successfully',
+                'message' => $hasSlipData && $hasMatchData
+                    ? 'Slip updated and match added successfully'
+                    : ($hasSlipData ? 'Slip updated successfully' : 'Match added to slip successfully'),
                 'data' => [
                     'id' => $masterSlip->id,
                     'name' => $masterSlip->name ?? 'Unnamed Slip',
@@ -1126,22 +1378,34 @@ class SlipController extends Controller
                     'matches_count' => $masterSlip->matches()->count(),
                     'generated_slips_count' => $masterSlip->generatedSlips()->count(),
                     'alternative_slips_count' => $masterSlip->alternative_slips_count,
+                    'added_match' => $addedMatch, // Only present if a match was added
                 ]
             ]);
+
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Slip not found',
-                'error' => 'The requested slip does not exist.'
-            ], Response::HTTP_NOT_FOUND);
+            ], 404);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors'  => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
-            Log::error('Failed to update slip: ' . $e->getMessage());
+            DB::rollBack();
+            Log::error('Failed to update master slip', [
+                'master_slip_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update slip',
-                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error',
+            ], 500);
         }
     }
 
@@ -1202,6 +1466,259 @@ class SlipController extends Controller
         }
     }
 
+
+        /**
+     * Get MasterSlip details with matches for frontend dashboard display.
+     *
+     * Returns only the essential metadata and matches in a clean, easy-to-consume format.
+     * Optimized for dashboard rendering.
+     *
+     * @param string $id The MasterSlip ID
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getDashboardSlip(string $id)
+    {
+        try {
+            $masterSlip = MasterSlip::with(['matches' => function ($query) {
+                $query->orderBy('pivot_created_at', 'asc'); // Consistent match order
+            }])
+            ->findOrFail($id);
+
+            // Transform matches to include pivot data cleanly
+            $formattedMatches = $masterSlip->matches->map(function ($match) {
+                $pivot = $match->pivot;
+
+                return [
+                    'match_id'     => $match->id,
+                    'home_team'    => $match->home_team,
+                    'away_team'    => $match->away_team,
+                    'league'       => $match->league,
+                    'match_date'   => $match->match_date?->toISOString(),
+                    'status'       => $match->status,
+                    'market'       => $pivot->market,
+                    'selection'    => $pivot->selection,
+                    'odds'         => (float) $pivot->odds,
+                    'match_data'   => $pivot->match_data ?? [],
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'slip_id'               => $masterSlip->id,
+                    'name'                  => $masterSlip->name ?? 'Unnamed Slip',
+                    'stake'                 => (float) $masterSlip->stake,
+                    'currency'              => $masterSlip->currency ?? 'EUR',
+                    'status'                => $masterSlip->status ?? 'draft',
+                    'total_odds'            => (float) $masterSlip->total_odds,
+                    'estimated_payout'      => (float) $masterSlip->estimated_payout,
+                    'matches_count'         => $masterSlip->matches()->count(),
+                    'created_at'            => $masterSlip->created_at?->toISOString(),
+                    'updated_at'            => $masterSlip->updated_at?->toISOString(),
+                    'matches'               => $formattedMatches,
+                ]
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Slip not found',
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch dashboard slip', [
+                'slip_id' => $id,
+                'error'   => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load slip details',
+            ], 500);
+        }
+    }
+
+
+
+
+    /**
+ * Add matches to a master slip
+ * 
+ * @param Request $request
+ * @param int $id Master slip ID
+ * @return \Illuminate\Http\JsonResponse
+ */
+    public function addMatchesToSlip(Request $request, $id)
+    {
+        try {
+            // Validate the request
+            $validator = Validator::make($request->all(), [
+                'stake' => 'required|numeric|min:0',
+                'currency' => 'required|string|max:10',
+                'name' => 'sometimes|string|max:255',
+                'matches' => 'required|array|min:1',
+                'matches.*.match_id' => 'required|integer|exists:matches,id',
+                'matches.*.market' => 'required|string|max:100',
+                'matches.*.market_name' => 'sometimes|string|max:255',
+                'matches.*.selection' => 'required|string|max:255',
+                'matches.*.odds' => 'required|numeric|min:1.01',
+                'matches.*.home_team' => 'sometimes|string|max:255',
+                'matches.*.away_team' => 'sometimes|string|max:255',
+                'matches.*.league' => 'sometimes|string|max:255',
+                'matches.*.match_date' => 'sometimes|date',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Find the master slip
+            $masterSlip = MasterSlip::find($id);
+
+            if (!$masterSlip) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Slip not found'
+                ], 404);
+            }
+
+            // Update basic slip information
+            if ($request->has('stake')) {
+                $masterSlip->stake = $request->stake;
+            }
+            if ($request->has('currency')) {
+                $masterSlip->currency = $request->currency;
+            }
+            if ($request->has('name')) {
+                $masterSlip->name = $request->name;
+            }
+            $masterSlip->save();
+
+            // Process each match
+            $addedMatches = [];
+            foreach ($request->matches as $matchData) {
+                $matchId = $matchData['match_id'];
+
+                // Sync the match with pivot data
+                $masterSlip->matches()->syncWithoutDetaching([
+                    $matchId => [
+                        'market' => $matchData['market'],
+                        'market_name' => $matchData['market_name'] ?? $matchData['market'],
+                        'selection' => $matchData['selection'],
+                        'odds' => $matchData['odds'],
+                        'updated_at' => now(),
+                    ]
+                ]);
+
+                // Get match for response
+                $match = MatchModel::find($matchId);
+                $addedMatches[] = [
+                    'match_id' => $matchId,
+                    'home_team' => $matchData['home_team'] ?? $match->home_team,
+                    'away_team' => $matchData['away_team'] ?? $match->away_team,
+                    'league' => $matchData['league'] ?? $match->league,
+                    'market' => $matchData['market'],
+                    'market_name' => $matchData['market_name'] ?? $matchData['market'],
+                    'selection' => $matchData['selection'],
+                    'odds' => (float) $matchData['odds'],
+                ];
+            }
+
+            // Refresh relationships
+            $masterSlip->load(['matches', 'generatedSlips', 'user']);
+
+            // Calculate statistics - get pivot data differently
+            $matches = $masterSlip->matches;
+            $totalOdds = 1.0;
+
+            // Calculate from pivot data
+            foreach ($matches as $match) {
+                if ($match->pivot->odds) {
+                    $totalOdds *= (float) $match->pivot->odds;
+                }
+            }
+
+            $estimatedPayout = $masterSlip->stake * $totalOdds;
+
+            // Get match details with pivot data
+            $matchDetails = $matches->map(function ($match) {
+                return [
+                    'match_id' => $match->id,
+                    'home_team' => $match->home_team,
+                    'away_team' => $match->away_team,
+                    'league' => $match->league,
+                    'match_date' => $match->match_date?->toISOString(),
+                    'status' => $match->status,
+                    'selection' => $match->pivot->selection ?? null,
+                    'market' => $match->pivot->market ?? null,
+                    'market_name' => $match->pivot->market_name ?? null,
+                    'odds' => $match->pivot->odds ? (float) $match->pivot->odds : null,
+                    'prediction' => $match->analysis_prediction ?? null,
+                    'home_win_probability' => $match->analysis_home_win_probability ?? null,
+                    'draw_probability' => $match->analysis_draw_probability ?? null,
+                    'away_win_probability' => $match->analysis_away_win_probability ?? null,
+                    'confidence' => $match->analysis_confidence ?? null,
+                ];
+            });
+
+            // Get generated slips summary
+            $generatedSlipsSummary = $masterSlip->generatedSlips->take(5)->map(function ($slip) {
+                return [
+                    'id' => $slip->id,
+                    'total_odds' => (float) $slip->total_odds,
+                    'estimated_payout' => (float) $slip->estimated_payout,
+                    'confidence_score' => $slip->confidence_score ?? null,
+                    'status' => $slip->status,
+                    'created_at' => $slip->created_at?->toISOString(),
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Matches added to slip successfully',
+                'data' => [
+                    'slip' => [
+                        'id' => $masterSlip->id,
+                        'name' => $masterSlip->name ?? 'Unnamed Slip',
+                        'stake' => (float) $masterSlip->stake,
+                        'currency' => $masterSlip->currency ?? 'EUR',
+                        'status' => $masterSlip->status,
+                        'engine_status' => $masterSlip->engine_status,
+                        'analysis_quality' => $masterSlip->analysis_quality,
+                        'total_odds' => $totalOdds,
+                        'estimated_payout' => $estimatedPayout,
+                        'matches_count' => $matches->count(),
+                        'generated_slips_count' => $masterSlip->generatedSlips()->count(),
+                        'created_at' => $masterSlip->created_at?->toISOString(),
+                        'updated_at' => $masterSlip->updated_at?->toISOString(),
+                    ],
+                    'matches' => $matchDetails,
+                    'generated_slips_summary' => $generatedSlipsSummary,
+                    'statistics' => [
+                        'total_matches' => $matches->count(),
+                        'average_odds' => $matches->count() > 0 ? $totalOdds / $matches->count() : 0,
+                        'potential_payout' => $estimatedPayout,
+                        'profit_potential' => $estimatedPayout - $masterSlip->stake,
+                        'roi_percentage' => $masterSlip->stake > 0 ? (($estimatedPayout - $masterSlip->stake) / $masterSlip->stake) * 100 : 0,
+                    ],
+                    'added_matches' => $addedMatches,
+                    'added_count' => count($addedMatches)
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to add matches to slip: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to add matches to slip',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
 
 
 }

@@ -37,22 +37,22 @@ class Slip extends Model
 
     public function masterSlip()
     {
-        return $this->belongsTo(Slip::class, 'master_slip_id');
+        return $this->belongsTo(Slip::class, 'master_slip_id', 'id');
     }
 
     public function childSlips()
     {
-        return $this->hasMany(Slip::class, 'master_slip_id');
+        return $this->hasMany(Slip::class, 'master_slip_id', 'id');
     }
 
     public function slipMatches()
     {
-        return $this->hasMany(SlipMatch::class);
+        return $this->hasMany(SlipMatch::class, 'slip_id', 'id');
     }
 
     public function matches()
     {
-        return $this->belongsToMany(MatchModel::class, 'slip_matches')
+        return $this->belongsToMany(MatchModel::class, 'slip_matches', 'slip_id', 'match_id')
                     ->withPivot('selected_market_id', 'selected_outcome', 'selected_odds', 'confidence', 'position')
                     ->withTimestamps();
     }

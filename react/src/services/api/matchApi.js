@@ -36,6 +36,18 @@ const matchApi = {
       throw error;
     }
   },
+
+  // Get matches for betslip selection
+  getMatchesForBetslip: async () => {
+    const response = await axios.get(`${API_URL}/getMatches-betslip`);
+    return response.data;
+  },
+
+  // Get detailed match information
+  getMatchDetail: async (matchId) => {
+    const response = await axios.get(`${API_URL}/single-betslip/${matchId}`);
+    return response.data;
+  },
 };
 
 export default matchApi;

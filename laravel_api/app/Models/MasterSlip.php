@@ -44,18 +44,18 @@ class MasterSlip extends Model
     // Relationships
     public function selections()
     {
-        return $this->hasMany(MasterSlipSelection::class);
+        return $this->hasMany(MasterSlipSelection::class, 'master_slip_id', 'id');
     }
 
     public function slips()
     {
-        return $this->hasMany(AlternativeSlip::class);
+        return $this->hasMany(AlternativeSlip::class, 'master_slip_id', 'id');
     }
 
  
     public function generatedSlips()
     {
-        return $this->hasMany(GeneratedSlip::class, 'master_slip_id');
+        return $this->hasMany(GeneratedSlip::class, 'master_slip_id', 'id');
     }
 
     // Add user relationship if needed
@@ -66,7 +66,7 @@ class MasterSlip extends Model
 
     public function slipMatches()
     {
-        return $this->hasMany(MasterSlipMatch::class);
+         return $this->hasMany(MasterSlipMatch::class, 'master_slip_id', 'id');
     }
 
     public function matches()
@@ -80,6 +80,6 @@ class MasterSlip extends Model
     // Best slip relationship
     public function bestSlip()
     {
-        return $this->belongsTo(AlternativeSlip::class, 'best_alternative_slip_id');
+        return $this->belongsTo(AlternativeSlip::class, 'best_alternative_slip_id', 'id');
     }
 }

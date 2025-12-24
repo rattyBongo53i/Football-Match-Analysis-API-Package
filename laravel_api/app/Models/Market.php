@@ -35,27 +35,27 @@ class Market extends Model
 
     public function matches()
     {
-        return $this->belongsToMany(MatchModel::class)
+        return $this->belongsToMany(MatchModel::class, 'match_markets', 'market_id', 'match_id')
             ->withPivot('market_data')
             ->withTimestamps();
     }
     public function outcomes()
     {
-        return $this->hasMany(MarketOutcomes::class);
+        return $this->hasMany(MarketOutcomes::class, 'market_id', 'id');
     }
 
     public function matchMarkets()
     {
-        return $this->hasMany(MatchMarket::class);
+        return $this->hasMany(MatchMarket::class, 'market_id', 'id');
     }
 
     public function slipMatches()
     {
-        return $this->hasMany(SlipMatch::class, 'selected_market_id');
+        return $this->hasMany(SlipMatch::class, 'selected_market_id', 'id');
     }
 
     public function predictions()
     {
-        return $this->hasMany(Prediction::class);
+        return $this->hasMany(Prediction::class, 'market_id', 'id');
     }
 }

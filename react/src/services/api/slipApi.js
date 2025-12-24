@@ -26,7 +26,7 @@ const slipApi = {
   // Get single master slip details
   getMasterSlip: async (id) => {
     try {
-      const response = await axios.get(`${API_URL}/master-slips/${id}`);
+      const response = await axios.get(`${API_URL}/da-master-slips/${id}`);
       return response.data;
     } catch (error) {
       console.error("Error fetching master slip:", error);
@@ -115,18 +115,6 @@ const slipApi = {
   },
 
   // Add a match to slip
-  addMatchToSlip: async (slipId, matchData) => {
-    try {
-      const response = await axios.post(
-        `${API_URL}/slips/${slipId}/add-match`,
-        matchData
-      );
-      return response.data;
-    } catch (error) {
-      console.error("Error adding match to slip:", error);
-      throw error;
-    }
-  },
 
   // Remove a match from slip
   removeMatchFromSlip: async (slipId, matchId) => {
@@ -199,6 +187,47 @@ const slipApi = {
       return 0;
     });
   },
+
+  getSlipForDashboard: async (slipId) => {
+    try {
+      const response = await axios.get(`${API_URL}/slips/${slipId}/dashboard`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching slip for dashboard:", error);
+      throw error;
+    }
+  },
+
+  // Add matches to slip
+  addMatchesToSlip: async (slipId, slipData) => {
+    try {
+      const response = await axios.post(
+        `${API_URL}/slips/${slipId}/add-match`,
+        slipData
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error adding matches to slip:", error);
+      throw error;
+    }
+  },
+
+  getMasterSlipAnalysis: async (slipId) => {
+    try {
+      const response = await axios.get(`${API_URL}/slips/${slipId}/analysis`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching slip analysis:", error);
+      throw error;
+    }
+  },
 };
 
+
+
 export default slipApi;
+
+
+
+
+

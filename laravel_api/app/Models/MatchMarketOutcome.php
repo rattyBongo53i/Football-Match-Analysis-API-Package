@@ -30,6 +30,6 @@ class MatchMarketOutcome extends Model
     // Relationships
     public function matchMarket()
     {
-        return $this->belongsTo(MatchMarket::class);
+        return $this->belongsTo(MatchMarket::class, 'match_market_id', 'id');
     }
 }

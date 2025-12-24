@@ -1,168 +1,61 @@
-/* Refactored Global Styles: Soft Light & Glassmorphism */
+/* Refactored Global Styles: High-Contrast & Depth */
 
 :root {
-  --primary-gradient: linear-gradient(135deg, #6A1B9A 0%, #9C27B0 100%);
-  --secondary-gradient: linear-gradient(135deg, #00BFA5 0%, #1DE9B6 100%);
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.4);
-  --soft-shadow: 0 8px 32px rgba(31, 38, 135, 0.07);
+  /* High Contrast Palette */
+  --ink-primary: #1A1C1E;    /* Bold text */
+  --ink-secondary: #454749;  /* Supporting text */
+  --ink-tertiary: #74777F;   /* Captions - still accessible */
+  
+  /* Brand Accents */
+  --primary-deep: #6A1B9A;
+  --secondary-teal: #00897B;
+  
+  /* Modern Elevation System (Multi-layered shadows for realism) */
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+  --shadow-lg: 0 12px 24px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.04);
+  
+  --surface-white: #FFFFFF;
+  --surface-ground: #F8F9FC;
 }
 
-/* Custom modern scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Base Polish */
+body {
+  color: var(--ink-secondary);
+  background-color: var(--surface-ground);
+  -webkit-font-smoothing: antialiased;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 20px;
-  border: 2px solid #F8F9FC; /* Matches theme background */
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(106, 27, 154, 0.2);
-}
-
-.main-content {
-  margin-left: 280px;
-  padding: 32px;
-  min-height: 100vh;
-  transition: margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* --- Refined Spring Animations --- */
-@keyframes revealUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes glassShimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-/* Apply reveal animation to Paper components */
-.MuiPaper-root {
-  animation: revealUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-/* --- Modern Glass Effect --- */
-.glass-effect {
-  background: var(--glass-bg) !important;
-  backdrop-filter: blur(12px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
-  border: 1px solid var(--glass-border) !important;
-  box-shadow: var(--soft-shadow) !important;
-  border-radius: 20px !important;
-}
-
-/* --- Gradient Logic --- */
-.purple-gradient {
-  background: var(--primary-gradient) !important;
-  color: white !important;
-  box-shadow: 0 4px 15px rgba(106, 27, 154, 0.2) !important;
-}
-
-.green-gradient {
-  background: var(--secondary-gradient) !important;
-  color: white !important;
-  box-shadow: 0 4px 15px rgba(0, 191, 165, 0.2) !important;
-}
-
-/* --- Betting Card Overhaul --- */
+/* Enhanced Card Class */
 .betting-card {
-  position: relative;
-  overflow: hidden;
-  background: white !important;
-  border: 1px solid rgba(0, 0, 0, 0.05) !important;
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  background: var(--surface-white);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .betting-card:hover {
-  transform: translateY(-8px) !important;
-  box-shadow: 0 20px 40px rgba(106, 27, 154, 0.08) !important;
-  border-color: rgba(106, 27, 154, 0.15) !important;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
-/* Modern Shimmer Effect */
-.betting-card::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -150%;
-  width: 50%;
-  height: 100%;
-  background: linear-gradient(
-    to right,
-    transparent,
-    rgba(255, 255, 255, 0.6),
-    transparent
-  );
-  transform: skewX(-20deg);
-  transition: 0.75s;
+/* Typography Hierarchy */
+h1, h2, h3, .MuiTypography-h4, .MuiTypography-h5 {
+  color: var(--ink-primary);
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
 }
 
-.betting-card:hover::after {
-  left: 150%;
-}
-
-/* --- Status Indicators --- */
-.profit-indicator, .loss-indicator, .neutral-indicator {
-  padding: 6px 16px;
-  border-radius: 12px;
-  font-weight: 700;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  display: inline-flex;
-  align-items: center;
-}
-
+/* Status Indicators - More Vibrant for Accessibility */
 .profit-indicator {
-  background: rgba(0, 191, 165, 0.1) !important;
-  color: #00796B !important;
+  background: rgba(0, 191, 165, 0.12) !important;
+  color: #00695C !important; /* Darker teal for contrast on light green */
+  border: 1px solid rgba(0, 191, 165, 0.2);
 }
 
 .loss-indicator {
-  background: rgba(211, 47, 47, 0.1) !important;
+  background: rgba(239, 83, 80, 0.12) !important;
   color: #C62828 !important;
-}
-
-/* --- Table Enhancements --- */
-.MuiTableRow-root {
-  transition: all 0.2s ease !important;
-}
-
-.MuiTableRow-root:hover {
-  background-color: rgba(106, 27, 154, 0.03) !important;
-  transform: scale(1.002);
-}
-
-/* --- Responsive Layout --- */
-@media (max-width: 900px) {
-  .main-content {
-    margin-left: 0;
-    padding: 20px;
-  }
-}
-
-/* Fix for Dialogs in Light Mode */
-.MuiDialog-paper {
-  background-color: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(20px) !important;
-  color: #1C1C1E !important;
-  border-radius: 24px !important;
-  border: 1px solid white !important;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid rgba(239, 83, 80, 0.2);
 }

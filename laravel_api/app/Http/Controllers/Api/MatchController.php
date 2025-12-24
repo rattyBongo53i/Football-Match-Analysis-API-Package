@@ -103,10 +103,116 @@ class MatchController extends Controller
         }
     }
 
+/**
+ * Store a newly created match with all associated data.
+ * Updated to dynamically resolve/create team IDs and map stats to the team_forms table.
+ */
+public function store(Request $request): JsonResponse
+{
+    return DB::transaction(function () use ($request) {
+        // 1. Resolve or Create Teams to get IDs
+        $homeTeam = Team::updateOrCreate(
+            ['name' => $request->home_team],
+            ['league' => $request->league] // Optional: update league if team exists
+        );
+
+        $awayTeam = Team::updateOrCreate(
+            ['name' => $request->away_team],
+            ['league' => $request->league]
+        );
+
+        // 2. Create Core Match Record using resolved IDs
+        $match = MatchModel::create([
+            'home_team'     => $request->home_team,
+            'away_team'     => $request->away_team,
+            'home_team_id'  => $homeTeam->id,
+            'away_team_id'  => $awayTeam->id,
+            'league'        => $request->league,
+            'match_date'    => $request->match_date . ' ' . ($request->match_time ?? '00:00:00'),
+            'status'        => $request->status ?? 'scheduled',
+            'venue'         => $request->venue,
+            'referee'       => $request->referee,
+            'weather_conditions' => $request->weather,
+            'home_score'    => $request->home_score,
+            'away_score'    => $request->away_score,
+            'importance'    => $request->notes,
+            'prediction_ready' => false,
+            'analysis_status'  => 'pending'
+        ]);
+
+        // 3. Process Team Form (Using resolved IDs for team_id)
+        $formsToProcess = [
+            'home_form' => ['id' => $homeTeam->id, 'venue' => 'home'],
+            'away_form' => ['id' => $awayTeam->id, 'venue' => 'away']
+        ];
+
+        foreach ($formsToProcess as $payloadKey => $meta) {
+            if ($request->has($payloadKey)) {
+                $formData = $request->input($payloadKey);
+                $match->teamForms()->create([
+                    'team_id'           => $meta['id'], // Resolved from Team table
+                    'venue'             => $meta['venue'],
+                    'form_rating'       => $formData['form_rating'] ?? 50.00,
+                    'raw_form'          => json_encode($formData['raw_form'] ?? []),
+                    'form_momentum'     => $formData['form_momentum'] ?? 0.00,
+                    'matches_played'    => $formData['matches_played'] ?? 0,
+                    'wins'              => $formData['wins'] ?? 0,
+                    'draws'             => $formData['draws'] ?? 0,
+                    'losses'            => $formData['losses'] ?? 0,
+                    'goals_scored'      => $formData['goals_scored'] ?? 0,
+                    'goals_conceded'    => $formData['goals_conceded'] ?? 0,
+                    'avg_goals_scored'  => $formData['avg_goals_scored'] ?? 0.00,
+                    'avg_goals_conceded'=> $formData['avg_goals_conceded'] ?? 0.00,
+                    'clean_sheets'      => $formData['clean_sheets'] ?? 0,
+                    'failed_to_score'   => $formData['failed_to_score'] ?? 0,
+                    'form_string'       => $formData['form_string'] ?? null,
+                    'calculated_at'     => now(),
+                ]);
+            }
+        }
+
+        // 4. Process Head-to-Head Statistics
+        if ($request->has('head_to_head_stats.last_meetings')) {
+            foreach ($request->input('head_to_head_stats.last_meetings') as $meeting) {
+                $scores = explode('-', $meeting['score']);
+                $match->historicalResults()->create([
+                    'home_team'  => $meeting['home_team'],
+                    'away_team'  => $meeting['away_team'],
+                    'home_score' => trim($scores[0] ?? 0),
+                    'away_score' => trim($scores[1] ?? 0),
+                    'match_date' => $meeting['date'],
+                ]);
+            }
+        }
+
+        // 5. Process Markets and Outcomes
+        if ($request->has('markets')) {
+            foreach ($request->markets as $marketData) {
+                $market = Market::where('code', $marketData['market_type'])->first();
+                if ($market) {
+                    $match->matchMarkets()->create([
+                        'market_id' => $market->id,
+                        'market_data' => [
+                            'outcomes' => $marketData['outcomes'],
+                            'is_active' => true
+                        ]
+                    ]);
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Match stored with resolved Team IDs.',
+            'id' => $match->id
+        ], 201);
+    });
+}
+
     /**
      * Store a newly created match.
      */
-    public function store(StoreMatchRequest $request): JsonResponse
+    public function stored(StoreMatchRequest $request): JsonResponse
     {
         set_time_limit(60);
 
@@ -477,6 +583,147 @@ class MatchController extends Controller
             );
         }
     }
+
+
+
+        /**
+     * Lightweight fetch for betslip selection.
+     */
+public function getMatchesAllForBetslip(): JsonResponse
+{
+    try {
+        // 1. Fetch the base match records first to ensure they exist
+        $matches = MatchModel::query()
+            ->select(['id', 'home_team', 'away_team', 'league', 'match_date', 'status'])
+            ->where('status', 'scheduled')
+            ->orderBy('match_date', 'asc')
+            ->get();
+
+        if ($matches->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'No scheduled matches found for the betslip.',
+                'data' => []
+            ], 200);
+        }
+
+        // 2. Attempt to load Markets and specifically include the 'odds' column
+        try {
+            $matches->load(['matchMarkets' => function($query) {
+                // IMPORTANT: Added 'odds' and 'is_active' to the select list
+                $query->select(['id', 'match_id', 'market_id', 'market_data', 'odds', 'is_active'])
+                      ->where('is_active', true); 
+                
+                $query->with(['market' => function($mQuery) {
+                    $mQuery->select(['id', 'name', 'code']);
+                }]);
+            }]);
+
+            // 3. Specific validation: Check if we actually retrieved markets
+            $totalMarketsLoaded = $matches->sum(fn($m) => $m->matchMarkets->count());
+
+            if ($totalMarketsLoaded === 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to retrieve markets: Matches exist but no active markets or odds were found.',
+                    'error_code' => 'EMPTY_MARKET_DATA'
+                ], 422);
+            }
+
+        } catch (\Exception $relationException) {
+            // This triggers if there is a SQL error specifically in the market join/query
+            return response()->json([
+                'success' => false,
+                'message' => 'A database error occurred while specifically attempting to fetch market odds.',
+                'debug' => $relationException->getMessage()
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'count' => $matches->count(),
+            'data' => $matches
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'An unexpected error occurred while retrieving betslip data.',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+
+
+
+/**
+ * Lightweight fetch for a single match to add to a betslip.
+ * Includes core identifiers, markets, and odds.
+    Here is the single-match version of that function. It follows the same lightweight pattern,
+     ensuring only the necessary betslip data is returned for a specific ID.
+ * 
+ * @param int $id
+ * @return JsonResponse
+ */
+
+public function getMatchForBetslip(int $id): JsonResponse
+{
+    try {
+        // 1. Fetch the base match record
+        $match = MatchModel::query()
+            ->select(['id', 'home_team', 'away_team', 'league', 'match_date', 'status'])
+            ->find($id);
+
+        if (!$match) {
+            return response()->json([
+                'success' => false, 
+                'message' => 'Match not found'
+            ], 404);
+        }
+
+        // 2. Attempt to load the associated markets and odds
+        try {
+            $match->load(['matchMarkets' => function($query) {
+                // We explicitly select 'odds' and 'is_active' from the match_markets table
+                $query->select(['id', 'match_id', 'market_id', 'market_data', 'odds', 'is_active'])
+                      ->where('is_active', true);
+                
+                $query->with(['market' => function($mQuery) {
+                    $mQuery->select(['id', 'name', 'code']);
+                }]);
+            }]);
+
+            // 3. Specific validation: Check if markets exist for this specific match
+            if ($match->matchMarkets->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Match found, but failed to retrieve any active markets or odds.',
+                    'error_code' => 'MISSING_MARKET_DATA'
+                ], 422);
+            }
+
+        } catch (\Exception $relationException) {
+            // This catches database errors specifically during the join/loading of markets
+            return response()->json([
+                'success' => false,
+                'message' => 'A critical error occurred while specifically fetching market and odds data.',
+                'debug' => $relationException->getMessage()
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $match
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'An unexpected error occurred: ' . $e->getMessage()
+        ], 500);
+    }
+}
 
     /**
      * Store markets for a match

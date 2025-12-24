@@ -28,6 +28,6 @@ class MarketOutcomes extends Model
     // Relationships
     public function market()
     {
-        return $this->belongsTo(Market::class);
+        return $this->belongsTo(Market::class, 'market_id', 'id');
     }
 }

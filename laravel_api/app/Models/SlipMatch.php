@@ -24,16 +24,16 @@ class SlipMatch extends Model
     // Relationships
     public function slip()
     {
-        return $this->belongsTo(Slip::class);
+        return $this->belongsTo(Slip::class,  'slip_id', 'id');
     }
 
     public function match()
     {
-        return $this->belongsTo(MatchModel::class);
+        return $this->belongsTo(MatchModel::class, 'match_id', 'id');
     }
 
     public function selectedMarket()
     {
-        return $this->belongsTo(Market::class, 'selected_market_id');
+        return $this->belongsTo(Market::class, 'selected_market_id', 'id');
     }
 }
