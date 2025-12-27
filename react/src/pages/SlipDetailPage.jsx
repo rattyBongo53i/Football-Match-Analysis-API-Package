@@ -64,6 +64,12 @@ const SlipDetailPage = () => {
   const [confirmConfig, setConfirmConfig] = useState({
     open: false,
     loading: false,
+    title: "",
+    message: "",
+    confirmText: "",
+    confirmColor: "primary",
+    icon: null,
+    type: "",
   });
 
   useEffect(() => {
@@ -130,6 +136,7 @@ const SlipDetailPage = () => {
 
   const handleDeleteSlip = async () => {
     setIsDeleting(true);
+    setDeleteDialogOpen(true);
     try {
       await slipApi.deleteSlip(id);
       showSnackbar("Slip deleted successfully", "success");
@@ -204,11 +211,22 @@ const SlipDetailPage = () => {
       return;
     }
 
-    setConfirmConfig({ ...confirmConfig, open: true });
+    // Set up confirmation dialog for adding matches
+    setConfirmConfig({
+      open: true,
+      loading: false,
+      title: "Add Selections?",
+      message: "Are you sure you want to add these matches to your current slip?",
+      confirmText: "Confirm & Add",
+      confirmColor: "primary",
+      icon: AddCircle,
+      type: "add"
+    });
   };
 
   const handleConfirmAddMatches = async () => {
-    setIsSubmitting(true);
+    setConfirmConfig({ ...confirmConfig, loading: true });
+    
     try {
       const slipData = {
         stake: slip.stake || 0,
@@ -235,13 +253,12 @@ const SlipDetailPage = () => {
       );
       setSelectedMatches([]);
       setAddMatchDialogOpen(false);
+      setConfirmConfig({ ...confirmConfig, open: false, loading: false });
       fetchSlipDetails();
     } catch (err) {
       console.error("Error adding matches:", err);
       showSnackbar("Failed to add matches", "error");
-    } finally {
-      setIsSubmitting(false);
-      setConfirmConfig({ ...confirmConfig, open: false });
+      setConfirmConfig({ ...confirmConfig, open: false, loading: false });
     }
   };
 
@@ -306,8 +323,10 @@ const SlipDetailPage = () => {
     }
   };
 
-  const handleRunAnalyze = (id) => {
-    navigate(`/slips/master/${id}`);
+  // const { id } = useParams();
+  const slipid = id;
+  const handleRunAnalyze = (slipid) => {
+    navigate(`/slips/master/${slipid}`);
   };
 
   const showSnackbar = (message, severity = "info") => {
@@ -373,11 +392,10 @@ const SlipDetailPage = () => {
           <ActionButtons
             onEdit={() => setEditModalOpen(true)}
             onAnalyze={handleRunAnalysis}
-            onDelete={() => setDeleteDialogOpen(true)}
-            // onAddMatches={() => setAddMatchDialogOpen(true)}
+            onDelete={handleDeleteSlip}
             onAddMatchesToSlip={handleAddMatchesToSlip}
             matchesCount={slip.matches?.length || 0}
-            onViewAnalysis={() => handleRunAnalysis(slip.id)}
+            onViewAnalysis={() => handleRunAnalyze(slipid)}
           />
         </Box>
       </Fade>
@@ -419,21 +437,11 @@ const SlipDetailPage = () => {
         loading={confirmConfig.loading}
         onClose={() => setConfirmConfig({ ...confirmConfig, open: false })}
         onConfirm={handleConfirmAddMatches}
-        title={
-          dialogConfig.type === "delete"
-            ? "Delete Permanently?"
-            : "Add Selections?"
-        }
-        message={
-          dialogConfig.type === "delete"
-            ? "This will remove the slip and all associated data. This cannot be undone."
-            : "Are you sure you want to add these matches to your current slip?"
-        }
-        confirmText={
-          dialogConfig.type === "delete" ? "Delete" : "Confirm & Add"
-        }
-        confirmColor={dialogConfig.type === "delete" ? "error" : "primary"}
-        icon={dialogConfig.type === "delete" ? DeleteForever : AddCircle}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        confirmColor={confirmConfig.confirmColor}
+        icon={confirmConfig.icon}
       />
 
       <NotificationSnackbar snackbar={snackbar} onClose={handleSnackbarClose} />

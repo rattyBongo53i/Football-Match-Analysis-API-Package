@@ -25,6 +25,11 @@ import {
   Chip,
   InputAdornment,
   Tooltip,
+  Paper,
+  Stepper,
+  IconButton,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -38,8 +43,17 @@ import {
   EventNote as EventNoteIcon,
   Public as LeagueIcon,
   MonitorWeight as WeightIcon,
+  Close as CloseIcon,
+  AttachMoney as MoneyIcon,
+  CurrencyExchange as CurrencyIcon,
+  Delete as DeleteIcon,
 } from "@mui/icons-material";
+import { TextField as MuiTextField } from "@mui/material";
 
+// Import theme utilities
+// import { theme } from "../../theme";
+import { theme } from "../../theme";
+// import { theme } from "../../designTokens";
 // Components & Logic (Business logic preserved)
 import Last10Form from "../../components/matches/TeamForm/Last10Form";
 import { normalizeTeamFormForBackend } from "../../hooks/useTeamFormCalculator";
@@ -53,20 +67,8 @@ import {
   venueOptions,
   steps,
 } from "./constants";
-import {
-  GradientContainer,
-  StyledPaper,
-  GradientButton,
-  StyledStepper,
-  Header,
-} from "./styledComponents";
 import HeadToHeadInput from "./HeadToHeadInput";
 import MarketItem from "./MarketItem";
-import {
-  MemoizedTextField,
-  MemoizedSelect,
-  MemoizedMenuItem,
-} from "./MemoizedComponents";
 import {
   getMarketType,
   normalizeHeadToHead,
@@ -95,6 +97,185 @@ const INITIAL_MARKETS = [
   { id: 11, name: "Half Time/Full Time", required: false, odds: "" },
   { id: 12, name: "Total Goals", required: false, odds: "" },
 ];
+
+// Memoized components for better performance
+const MemoizedTextField = memo(({ children, ...props }) => (
+  <TextField {...props}>{children}</TextField>
+));
+
+const MemoizedSelect = memo(({ children, ...props }) => (
+  <Select {...props}>{children}</Select>
+));
+
+const MemoizedMenuItem = memo(({ children, ...props }) => (
+  <MenuItem {...props}>{children}</MenuItem>
+));
+ console.log(theme);
+
+
+// Update the TextField component to use theme
+const TextField = ({ InputProps, sx = {}, ...props }) => {
+  const defaultInputProps = useMemo(
+    () => ({
+      sx: {
+        color: theme.colors.text.primary,
+        backgroundColor: theme.colors.background.tertiary,
+        borderColor: theme.colors.border.light,
+        borderRadius: theme.borderRadius.md,
+        "&:focus": {
+          borderColor: theme.colors.accent.primary,
+          boxShadow: theme.shadows.focus,
+        },
+        "&:hover": {
+          borderColor: theme.colors.border.strong,
+        },
+        ...InputProps?.sx,
+      },
+    }),
+    [InputProps?.sx]
+  );
+
+  return (
+    <MuiTextField
+      InputProps={{
+        ...defaultInputProps,
+        ...InputProps,
+      }}
+      sx={{
+        "& .MuiOutlinedInput-root": {
+          "& fieldset": {
+            borderColor: theme.colors.border.light,
+          },
+          "&:hover fieldset": {
+            borderColor: theme.colors.border.strong,
+          },
+          "&.Mui-focused fieldset": {
+            borderColor: theme.colors.accent.primary,
+            boxShadow: theme.shadows.focus,
+          },
+        },
+        "& .MuiInputLabel-root": {
+          color: theme.colors.text.secondary,
+        },
+        "& .MuiInputLabel-root.Mui-focused": {
+          color: theme.colors.accent.primary,
+        },
+        ...sx,
+      }}
+      {...props}
+    />
+  );
+};
+
+// Updated container and paper components
+const Container = ({ children, sx = {}, ...props }) => (
+  <Box
+    sx={{
+      backgroundColor: theme.colors.background.primary,
+      minHeight: "100vh",
+      padding: theme.spacing[4],
+      ...sx,
+    }}
+    {...props}
+  >
+    {children}
+  </Box>
+);
+
+const StyledPaper = ({ children, sx = {}, ...props }) => (
+  <Paper
+    sx={{
+      backgroundColor: theme.colors.surface.card,
+      borderRadius: theme.borderRadius.lg,
+      border: `1px solid ${theme.colors.border.light}`,
+      boxShadow: theme.shadows.lg,
+      padding: theme.spacing[5],
+      transition: theme.transitions.normal,
+      "&:hover": {
+        boxShadow: theme.shadows.xl,
+        borderColor: theme.colors.border.strong,
+        transform: "translateY(-2px)",
+      },
+      ...sx,
+    }}
+    {...props}
+  >
+    {children}
+  </Paper>
+);
+
+const GradientButton = ({ children, sx = {}, ...props }) => (
+  <Button
+    sx={{
+      background: `linear-gradient(135deg, ${theme.colors.accent.primary}, ${theme.colors.accent.primaryHover})`,
+      color: "white",
+      borderRadius: theme.borderRadius.md,
+      padding: `${theme.spacing[2]} ${theme.spacing[4]}`,
+      fontWeight: theme.typography.fontWeight.medium,
+      transition: theme.transitions.fast,
+      "&:hover": {
+        background: `linear-gradient(135deg, ${theme.colors.accent.primaryHover}, ${theme.colors.accent.primary})`,
+        boxShadow: theme.shadows.lg,
+        transform: "translateY(-1px)",
+      },
+      "&:disabled": {
+        opacity: 0.5,
+        cursor: "not-allowed",
+      },
+      ...sx,
+    }}
+    {...props}
+  >
+    {children}
+  </Button>
+);
+
+const StyledStepper = ({ children, sx = {}, ...props }) => (
+  <Stepper
+    sx={{
+      "& .MuiStepLabel-root .MuiStepLabel-label": {
+        color: theme.colors.text.secondary,
+        "&.Mui-active": {
+          color: theme.colors.text.primary,
+          fontWeight: theme.typography.fontWeight.semibold,
+        },
+        "&.Mui-completed": {
+          color: theme.colors.accent.primary,
+        },
+      },
+      "& .MuiStepIcon-root": {
+        color: theme.colors.border.light,
+        "&.Mui-active": {
+          color: theme.colors.accent.primary,
+        },
+        "&.Mui-completed": {
+          color: theme.colors.accent.primary,
+        },
+      },
+      ...sx,
+    }}
+    {...props}
+  >
+    {children}
+  </Stepper>
+);
+
+const Header = ({ children, sx = {}, ...props }) => (
+  <Box
+    sx={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: theme.spacing[6],
+      paddingBottom: theme.spacing[3],
+      borderBottom: `1px solid ${theme.colors.border.medium}`,
+      ...sx,
+    }}
+    {...props}
+  >
+    {children}
+  </Box>
+);
 
 const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
   const marketHandler = useMemo(() => createMarketFormHandler(), []);
@@ -311,27 +492,28 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                 <Grid item xs={12}>
                   <Box
                     sx={{
-                      p: 3,
-                      borderRadius: 3,
-                      background: "rgba(156, 39, 176, 0.05)",
-                      border: "1px solid rgba(156, 39, 176, 0.1)",
+                      p: theme.spacing[4],
+                      borderRadius: theme.borderRadius.lg,
+                      backgroundColor: theme.colors.background.secondary,
+                      border: `1px solid ${theme.colors.border.light}`,
+                      boxShadow: theme.shadows.md,
                     }}
                   >
                     <Grid container alignItems="center" spacing={2}>
                       <Grid item xs={5}>
                         <MemoizedTextField
                           fullWidth
-                          variant="standard"
+                          variant="outlined"
                           placeholder="Home Team Name"
                           value={formData.home_team}
                           onChange={(e) =>
                             handleInputChange("home_team", e.target.value)
                           }
-                          inputProps={{
-                            style: {
+                          sx={{
+                            "& .MuiOutlinedInput-input": {
                               textAlign: "center",
-                              fontSize: "1.3rem",
-                              fontWeight: 600,
+                              fontSize: theme.typography.fontSize.xl,
+                              fontWeight: theme.typography.fontWeight.bold,
                             },
                           }}
                         />
@@ -339,8 +521,8 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                       <Grid item xs={2} sx={{ textAlign: "center" }}>
                         <Typography
                           variant="h5"
-                          color="primary.main"
-                          fontWeight="800"
+                          color={theme.colors.accent.primary}
+                          fontWeight={theme.typography.fontWeight.bold}
                         >
                           VS
                         </Typography>
@@ -348,17 +530,17 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                       <Grid item xs={5}>
                         <MemoizedTextField
                           fullWidth
-                          variant="standard"
+                          variant="outlined"
                           placeholder="Away Team Name"
                           value={formData.away_team}
                           onChange={(e) =>
                             handleInputChange("away_team", e.target.value)
                           }
-                          inputProps={{
-                            style: {
+                          sx={{
+                            "& .MuiOutlinedInput-input": {
                               textAlign: "center",
-                              fontSize: "1.3rem",
-                              fontWeight: 600,
+                              fontSize: theme.typography.fontSize.xl,
+                              fontWeight: theme.typography.fontWeight.bold,
                             },
                           }}
                         />
@@ -366,8 +548,7 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                     </Grid>
                   </Box>
                 </Grid>
-
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <MemoizedTextField
                     select
                     label="League"
@@ -379,15 +560,67 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
-                          <LeagueIcon fontSize="small" color="primary" />
+                          <LeagueIcon
+                            fontSize="small"
+                            sx={{ color: theme.colors.accent.primary }}
+                          />
                         </InputAdornment>
                       ),
                     }}
+                    SelectProps={{
+                      MenuProps: {
+                        PaperProps: {
+                          sx: {
+                            backgroundColor: theme.colors.surface.card,
+                            border: `1px solid ${theme.colors.border.light}`,
+                            color: theme.colors.text.primary,
+                            "& .MuiMenuItem-root": {
+                              color: theme.colors.text.primary,
+                              "&:hover": {
+                                backgroundColor: theme.colors.state.hover,
+                              },
+                              "&.Mui-selected": {
+                                backgroundColor: theme.colors.state.selected,
+                              },
+                            },
+                          },
+                        },
+                      },
+                    }}
+                    sx={{
+                      "& .MuiSelect-select": {
+                        color: theme.colors.text.primary,
+                      },
+                      "& .MuiInputLabel-root": {
+                        color: theme.colors.text.secondary,
+                      },
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: theme.colors.border.light,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: theme.colors.border.strong,
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: theme.colors.accent.primary,
+                      },
+                    }}
                   >
                     {leagueOptions.map((opt) => (
-                      <option key={opt} value={opt}>
+                      <MenuItem
+                        key={opt}
+                        value={opt}
+                        sx={{
+                          color: theme.colors.text.primary,
+                          "&:hover": {
+                            backgroundColor: theme.colors.state.hover,
+                          },
+                          "&.Mui-selected": {
+                            backgroundColor: theme.colors.state.selected,
+                          },
+                        }}
+                      >
                         {opt}
-                      </option>
+                      </MenuItem>
                     ))}
                   </MemoizedTextField>
                 </Grid>
@@ -405,7 +638,10 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
-                          <EventNoteIcon fontSize="small" color="primary" />
+                          <EventNoteIcon
+                            fontSize="small"
+                            sx={{ color: theme.colors.accent.primary }}
+                          />
                         </InputAdornment>
                       ),
                     }}
@@ -427,13 +663,35 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
 
                 <Grid item xs={12} md={4}>
                   <FormControl fullWidth>
-                    <InputLabel>Weather Condition</InputLabel>
+                    <InputLabel
+                      sx={{
+                        color: theme.colors.text.secondary,
+                        "&.Mui-focused": {
+                          color: theme.colors.accent.primary,
+                        },
+                      }}
+                    >
+                      Weather Condition
+                    </InputLabel>
                     <MemoizedSelect
                       value={formData.weather}
                       onChange={(e) =>
                         handleInputChange("weather", e.target.value)
                       }
                       label="Weather Condition"
+                      sx={{
+                        color: theme.colors.text.primary,
+                        backgroundColor: theme.colors.background.tertiary,
+                        "& .MuiOutlinedInput-notchedOutline": {
+                          borderColor: theme.colors.border.light,
+                        },
+                        "&:hover .MuiOutlinedInput-notchedOutline": {
+                          borderColor: theme.colors.border.strong,
+                        },
+                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                          borderColor: theme.colors.accent.primary,
+                        },
+                      }}
                     >
                       {WEATHER_OPTIONS.map((opt) => (
                         <MemoizedMenuItem key={opt} value={opt}>
@@ -517,7 +775,11 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                   alignItems="center"
                   mb={3}
                 >
-                  <Typography variant="h6" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    fontWeight={theme.typography.fontWeight.semibold}
+                    color={theme.colors.text.primary}
+                  >
                     Market Selection
                   </Typography>
                   <Button
@@ -525,7 +787,13 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                     size="small"
                     startIcon={<AddIcon />}
                     onClick={addMarket}
-                    sx={{ borderRadius: 2 }}
+                    sx={{
+                      borderRadius: theme.borderRadius.md,
+                      backgroundColor: theme.colors.accent.primary,
+                      "&:hover": {
+                        backgroundColor: theme.colors.accent.primaryHover,
+                      },
+                    }}
                   >
                     Custom Market
                   </Button>
@@ -556,8 +824,11 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                     <Chip
                       label={formData.league}
                       size="small"
-                      color="primary"
-                      variant="outlined"
+                      sx={{
+                        color: theme.colors.accent.primary,
+                        borderColor: theme.colors.accent.primary,
+                        backgroundColor: `rgba(${parseInt(theme.colors.accent.primary.slice(1, 3), 16)}, ${parseInt(theme.colors.accent.primary.slice(3, 5), 16)}, ${parseInt(theme.colors.accent.primary.slice(5, 7), 16)}, 0.1)`,
+                      }}
                     />
                   )}
                   {formData.match_date && (
@@ -565,52 +836,68 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                       label={`${formData.match_date} ${formData.match_time ? `@ ${formData.match_time}` : ""}`}
                       icon={<EventNoteIcon />}
                       size="small"
+                      sx={{
+                        color: theme.colors.text.secondary,
+                        backgroundColor: theme.colors.background.secondary,
+                      }}
                     />
                   )}
                   {formData.weather && (
-                    <Chip label={formData.weather} size="small" />
+                    <Chip
+                      label={formData.weather}
+                      size="small"
+                      sx={{
+                        color: theme.colors.text.secondary,
+                        backgroundColor: theme.colors.background.secondary,
+                      }}
+                    />
                   )}
                 </Box>
 
                 <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
+
                     <Box
                       sx={{
-                        p: 2,
-                        borderRadius: 2,
-                        border: "1px solid rgba(0,0,0,0.1)",
+                        p: theme.spacing[3],
+                        borderRadius: theme.borderRadius.md,
+                        border: `1px solid ${theme.colors.border.light}`,
+                        backgroundColor: theme.colors.background.secondary,
                       }}
                     >
                       <Typography
                         variant="subtitle2"
-                        fontWeight={600}
+                        fontWeight={theme.typography.fontWeight.semibold}
                         gutterBottom
+                        color={theme.colors.text.primary}
                       >
                         Data Density
                       </Typography>
-                      <Typography variant="body2">
+                      <Typography variant="body2" color={theme.colors.text.secondary}>
                         Home Form: <b>{homeFormMatches.length} matches</b>
                       </Typography>
-                      <Typography variant="body2">
+                      <Typography variant="body2" color={theme.colors.text.secondary}>
                         Away Form: <b>{awayFormMatches.length} matches</b>
                       </Typography>
-                      <Typography variant="body2">
+                      <Typography variant="body2" color={theme.colors.text.secondary}>
                         H2H History: <b>{headToHeadMatches.length} records</b>
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Box
                       sx={{
-                        p: 2,
-                        borderRadius: 2,
-                        border: "1px solid rgba(0,0,0,0.1)",
+                        p: theme.spacing[3],
+                        borderRadius: theme.borderRadius.md,
+                        border: `1px solid ${theme.colors.border.light}`,
+                        backgroundColor: theme.colors.background.secondary,
                       }}
                     >
                       <Typography
                         variant="subtitle2"
-                        fontWeight={600}
+                        fontWeight={theme.typography.fontWeight.semibold}
                         gutterBottom
+                        color={theme.colors.text.primary}
                       >
                         Active Markets
                       </Typography>
@@ -625,8 +912,11 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                               key={m.id}
                               label={m.name}
                               size="small"
-                              color="success"
-                              variant="outlined"
+                              sx={{
+                                color: theme.colors.accent.success,
+                                borderColor: theme.colors.accent.success,
+                                backgroundColor: `rgba(${parseInt(theme.colors.accent.success.slice(1, 3), 16)}, ${parseInt(theme.colors.accent.success.slice(3, 5), 16)}, ${parseInt(theme.colors.accent.success.slice(5, 7), 16)}, 0.1)`,
+                              }}
                             />
                           ))}
                       </Box>
@@ -665,18 +955,30 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
   }, []);
 
   return (
-    <GradientContainer maxWidth="xl">
+    <Container maxWidth="xl">
       <StyledPaper elevation={8}>
         <Header>
           <Box display="flex" alignItems="center">
             <Box sx={{ mr: 2 }}>
-              <SoccerIcon sx={{ fontSize: 32, color: "primary.main" }} />
+              <SoccerIcon
+                sx={{
+                  fontSize: 32,
+                  color: theme.colors.accent.primary,
+                }}
+              />
             </Box>
             <Box>
-              <Typography variant="h5" fontWeight="700">
+              <Typography
+                variant="h5"
+                fontWeight={theme.typography.fontWeight.bold}
+                color={theme.colors.text.primary}
+              >
                 Analysis Studio
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                color={theme.colors.text.secondary}
+              >
                 Feed the engine with match data
               </Typography>
             </Box>
@@ -686,13 +988,14 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
             label="Neural Ready"
             size="small"
             sx={{
-              bgcolor: "primary.50",
-              color: "primary.main",
+              backgroundColor: `rgba(${parseInt(theme.colors.accent.primary.slice(1, 3), 16)}, ${parseInt(theme.colors.accent.primary.slice(3, 5), 16)}, ${parseInt(theme.colors.accent.primary.slice(5, 7), 16)}, 0.15)`,
+              color: theme.colors.accent.primary,
+              fontWeight: theme.typography.fontWeight.medium,
             }}
           />
         </Header>
 
-        <Box sx={{ mt: 3 }}>
+        <Box sx={{ mt: theme.spacing[4] }}>
           <form onSubmit={handleSubmit}>
             {renderStepContent(activeStep)}
 
@@ -700,9 +1003,9 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
               sx={{
                 display: "flex",
                 justifyContent: "space-between",
-                mt: 4,
-                pt: 3,
-                borderTop: "1px solid rgba(0,0,0,0.1)",
+                mt: theme.spacing[6],
+                pt: theme.spacing[4],
+                borderTop: `1px solid ${theme.colors.border.medium}`,
               }}
             >
               <Button
@@ -710,6 +1013,14 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                 disabled={activeStep === 0 || submitting}
                 onClick={handleBack}
                 startIcon={<ArrowBackIcon />}
+                sx={{
+                  borderColor: theme.colors.border.light,
+                  color: theme.colors.text.secondary,
+                  "&:hover": {
+                    borderColor: theme.colors.border.strong,
+                    backgroundColor: theme.colors.state.hover,
+                  },
+                }}
               >
                 Back
               </Button>
@@ -734,7 +1045,18 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
                     {savedMatchId && (
                       <Button
                         variant="contained"
-                        color="success"
+                        sx={{
+                          backgroundColor: theme.colors.accent.success,
+                          color: "white",
+                          borderRadius: theme.borderRadius.md,
+                          "&:hover": {
+                            backgroundColor: theme.colors.accent.success,
+                            opacity: 0.9,
+                          },
+                          "&:disabled": {
+                            opacity: 0.5,
+                          },
+                        }}
                         onClick={() => handleGenerateSlips()}
                         startIcon={
                           isGenerating ? (
@@ -773,12 +1095,20 @@ const MatchEntryForm = ({ matchId, initialData, onSuccess }) => {
           onClose={closeSnackbar}
           severity={snackbar.severity}
           variant="filled"
-          sx={{ borderRadius: 2 }}
+          sx={{
+            borderRadius: theme.borderRadius.md,
+            backgroundColor:
+              snackbar.severity === "error"
+                ? theme.colors.accent.error
+                : snackbar.severity === "warning"
+                ? theme.colors.accent.warning
+                : theme.colors.accent.primary,
+          }}
         >
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </GradientContainer>
+    </Container>
   );
 };
 

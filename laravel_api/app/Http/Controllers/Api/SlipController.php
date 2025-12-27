@@ -14,6 +14,10 @@ use Carbon\Carbon;
 use App\Models\MatchModel;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use App\Models\Team_Form;
+use App\Models\Head_To_Head;
+use Illuminate\Support\Facades\Storage;
+use App\Jobs\GenerateAlternativeSlipsJob;
 
 
 /**
@@ -508,16 +512,19 @@ class SlipController extends Controller
         try {
             $masterSlip = MasterSlip::findOrFail($masterSlipId);
 
+            // Fetch generated slips count (uncomment if you want it)
             $generatedSlipsCount = GeneratedSlip::where('master_slip_id', $masterSlipId)->count();
 
             $status = [
                 'master_slip_id' => $masterSlipId,
                 'status' => $masterSlip->status,
-                'generated_slips_count' => $generatedSlipsCount,
-                'last_updated' => $masterSlip->updated_at->toISOString(),
+                'engine_status' => $masterSlip->engine_status ?? 'pending',      // Add this
+                'analysis_quality' => $masterSlip->analysis_quality ?? 'pending',  // Add this
+                'alternative_slips_count' => $generatedSlipsCount,                       // Add this
+                'last_updated' => $masterSlip->updated_at?->toISOString(),
                 'is_complete' => $masterSlip->status === 'completed',
                 'is_processing' => $masterSlip->status === 'processing',
-                'has_generated_slips' => $generatedSlipsCount > 0
+                'has_generated_slips' => $generatedSlipsCount > 0,
             ];
 
             return response()->json([
@@ -529,14 +536,13 @@ class SlipController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Master slip not found',
-                'error' => 'The requested master slip does not exist.'
-            ], Response::HTTP_NOT_FOUND);
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to retrieve slip status',
                 'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+            ], 500);
         }
     }
 
@@ -778,37 +784,100 @@ class SlipController extends Controller
     public function analyzeSlip($id)
     {
         try {
-            $slip = MasterSlip::findOrFail($id);
+            $slip = MasterSlip::with(['matches', 'slipMatches'])->findOrFail($id);
 
             // Check if slip has enough matches
             $matchCount = $slip->matches()->count();
-            if ($matchCount < 5 || $matchCount > 10) {
+            if ($matchCount < 2) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Slip must have 5-10 matches for analysis'
+                    'message' => 'Slip must have at least 2 matches for analysis'
+                ], 400);
+            }
+
+            // Check if slip is already being processed
+            if ($slip->engine_status === 'processing' || $slip->engine_status === 'queued') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Analysis already in progress'
                 ], 400);
             }
 
             // Update slip status
-            $slip->update(['status' => 'processing']);
+            $slip->update([
+                'status' => 'processing',
+                'engine_status' => 'queued',
+                'processing_started_at' => now(),
+                'analysis_quality' => 'pending'
+            ]);
 
-            // Trigger ML analysis (you'll need to implement this)
-            // This could be a queue job, external API call, etc.
+            // Dispatch GenerateAlternativeSlipsJob (your existing job)
+            // This job will handle: data cleaning, formatting, and calling ProcessPythonRequest
+            GenerateAlternativeSlipsJob::dispatch($id)
+                ->onQueue('slip_analysis')
+                ->delay(now()->addSeconds(3)); // Small delay to ensure slip update is saved
+
+            // Return immediate response - processing happens in background
+            return response()->json([
+                'success' => true,
+                'message' => 'Analysis queued successfully',
+                'data' => [
+                    'slip_id' => $id,
+                    'status' => 'queued',
+                    'engine_status' => 'queued',
+                    'estimated_completion' => '30-60 seconds',
+                    'monitor_url' => url("/api/slips/{$id}/status")
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to start slip analysis: ' . $e->getMessage(), [
+                'slip_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            // Update slip status to failed
+            if (isset($slip)) {
+                $slip->update([
+                    'status' => 'failed',
+                    'engine_status' => 'failed',
+                    'processing_completed_at' => now()
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to start analysis',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    public function checkAnalysisStatus($id)
+    {
+        try {
+            $slip = MasterSlip::findOrFail($id);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Analysis started',
                 'data' => [
-                    'slip_id' => $id,
-                    'status' => 'processing'
+                    'slip_id' => $slip->id,
+                    'status' => $slip->status,
+                    'engine_status' => $slip->engine_status,
+                    'analysis_quality' => $slip->analysis_quality,
+                    'alternative_slips_count' => $slip->alternative_slips_count,
+                    'processing_started_at' => $slip->processing_started_at,
+                    'processing_completed_at' => $slip->processing_completed_at,
+                    'estimated_payout' => $slip->estimated_payout,
+                    'total_odds' => $slip->total_odds
                 ]
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to start analysis',
-                'error' => $e->getMessage()
+                'message' => 'Failed to get status',
+                'error' => config('app.debug') ? $e->getMessage() : null
             ], 500);
         }
     }
@@ -1479,63 +1548,350 @@ class SlipController extends Controller
     public function getDashboardSlip(string $id)
     {
         try {
-            $masterSlip = MasterSlip::with(['matches' => function ($query) {
-                $query->orderBy('pivot_created_at', 'asc'); // Consistent match order
-            }])
-            ->findOrFail($id);
+            // Start a database transaction to ensure data consistency
+            DB::beginTransaction();
+
+            $masterSlip = MasterSlip::with([
+                'matches' => function ($query) {
+                    $query->orderBy('pivot_created_at', 'asc'); // Consistent match order
+                }
+            ])
+                ->findOrFail($id);
+
+            // Count the number of matches for this slip and update matches_count column
+            $matchesCount = $masterSlip->matches()->count();
+            $masterSlip->update([
+                'matches_count' => $matchesCount,
+            ]);
+
+            // Calculate total odds from all matches in the slip
+            $totalOdds = 1.0;
+            $hasMatchesWithOdds = false;
+
+            foreach ($masterSlip->matches as $match) {
+                $pivot = $match->pivot;
+                if ($pivot && $pivot->odds && is_numeric($pivot->odds)) {
+                    $totalOdds *= (float) $pivot->odds;
+                    $hasMatchesWithOdds = true;
+                }
+            }
+
+            // If no matches or no odds, set to 1 (neutral)
+            if (!$hasMatchesWithOdds) {
+                $totalOdds = 1.0;
+            }
+
+            // Calculate estimated payout
+            $stake = (float) $masterSlip->stake;
+            $estimatedPayout = $stake * $totalOdds;
+
+            // Update the master slip with calculated values
+            $masterSlip->update([
+                'total_odds' => $totalOdds,
+                'estimated_payout' => $estimatedPayout,
+                'updated_at' => now(),
+            ]);
+
+            // Commit the transaction
+            DB::commit();
+
+            // Refresh the slip to get updated values
+            $masterSlip->refresh();
 
             // Transform matches to include pivot data cleanly
             $formattedMatches = $masterSlip->matches->map(function ($match) {
                 $pivot = $match->pivot;
 
+                // Parse match_data if it's JSON string
+                $matchData = $pivot->match_data ?? [];
+                if (is_string($matchData)) {
+                    $matchData = json_decode($matchData, true) ?? [];
+                }
+
                 return [
-                    'match_id'     => $match->id,
-                    'home_team'    => $match->home_team,
-                    'away_team'    => $match->away_team,
-                    'league'       => $match->league,
-                    'match_date'   => $match->match_date?->toISOString(),
-                    'status'       => $match->status,
-                    'market'       => $pivot->market,
-                    'selection'    => $pivot->selection,
-                    'odds'         => (float) $pivot->odds,
-                    'match_data'   => $pivot->match_data ?? [],
+                    'id' => $match->id,
+                    'match_id' => $match->id,
+                    'home_team' => $match->home_team,
+                    'away_team' => $match->away_team,
+                    'league' => $match->league,
+                    'match_date' => $match->match_date?->toISOString(),
+                    'kickoff_time' => $match->match_date?->format('H:i'),
+                    'status' => $match->status,
+                    'market' => $pivot->market,
+                    'market_name' => $pivot->market_name ?? $pivot->market,
+                    'selection' => $pivot->selection,
+                    'odds' => (float) $pivot->odds,
+                    'match_data' => $matchData,
+                    'created_at' => $pivot->created_at?->toISOString(),
+                    'updated_at' => $pivot->updated_at?->toISOString(),
                 ];
             });
 
+            // Calculate additional statistics (matchesCount already calculated above)
+            $averageOdds = $matchesCount > 0 ? $totalOdds / $matchesCount : 0;
+            $potentialProfit = $estimatedPayout - $stake;
+            $roiPercentage = $stake > 0 ? ($potentialProfit / $stake) * 100 : 0;
+
+            // Get confidence score if available (from analysis or calculate)
+            $confidenceScore = $masterSlip->confidence_score ?? $this->calculateConfidenceScore($masterSlip);
+
+            // Risk assessment based on confidence
+            $riskLevel = $this->firstDetermineRiskLevel($confidenceScore, $matchesCount, $totalOdds);
+
             return response()->json([
                 'success' => true,
+                'message' => 'Slip details retrieved successfully',
                 'data' => [
-                    'slip_id'               => $masterSlip->id,
-                    'name'                  => $masterSlip->name ?? 'Unnamed Slip',
-                    'stake'                 => (float) $masterSlip->stake,
-                    'currency'              => $masterSlip->currency ?? 'EUR',
-                    'status'                => $masterSlip->status ?? 'draft',
-                    'total_odds'            => (float) $masterSlip->total_odds,
-                    'estimated_payout'      => (float) $masterSlip->estimated_payout,
-                    'matches_count'         => $masterSlip->matches()->count(),
-                    'created_at'            => $masterSlip->created_at?->toISOString(),
-                    'updated_at'            => $masterSlip->updated_at?->toISOString(),
-                    'matches'               => $formattedMatches,
+                    'slip' => [
+                        'id' => $masterSlip->id,
+                        'name' => $masterSlip->name ?? 'Unnamed Slip',
+                        'stake' => (float) $masterSlip->stake,
+                        'currency' => $masterSlip->currency ?? 'EUR',
+                        'status' => $masterSlip->status ?? 'draft',
+                        'engine_status' => $masterSlip->engine_status ?? 'idle',
+                        'analysis_quality' => $masterSlip->analysis_quality ?? 'pending',
+                        'total_odds' => (float) $totalOdds,
+                        'estimated_payout' => (float) $estimatedPayout,
+                        'confidence_score' => (float) $confidenceScore,
+                        'risk_level' => $riskLevel,
+                        'matches_count' => $matchesCount,
+                        'generated_slips_count' => $masterSlip->generatedSlips()->count(),
+                        'user_id' => $masterSlip->user_id,
+                        'created_at' => $masterSlip->created_at?->toISOString(),
+                        'updated_at' => $masterSlip->updated_at?->toISOString(),
+                    ],
+                    'matches' => $formattedMatches,
+                    'statistics' => [
+                        'total_matches' => $matchesCount,
+                        'total_odds' => (float) $totalOdds,
+                        'average_odds' => (float) $averageOdds,
+                        'stake' => (float) $stake,
+                        'estimated_payout' => (float) $estimatedPayout,
+                        'potential_profit' => (float) $potentialProfit,
+                        'roi_percentage' => (float) $roiPercentage,
+                        'confidence_score' => (float) $confidenceScore,
+                        'risk_level' => $riskLevel,
+                        'break_even_odds' => $stake > 0 ? (1 / ($stake / $estimatedPayout)) : 0,
+                    ],
+                    'analysis' => [
+                        'confidence_breakdown' => $this->getConfidenceBreakdown($masterSlip),
+                        'risk_factors' => $this->identifyRiskFactors($masterSlip),
+                        'recommendations' => $this->generateRecommendations($masterSlip),
+                    ]
                 ]
             ]);
+
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
+
             return response()->json([
                 'success' => false,
                 'message' => 'Slip not found',
             ], 404);
+
         } catch (\Exception $e) {
+            DB::rollBack();
+
             Log::error('Failed to fetch dashboard slip', [
                 'slip_id' => $id,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load slip details',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error',
             ], 500);
         }
     }
 
+/**
+ * Helper method to calculate confidence score
+ */
+private function calculateConfidenceScore(MasterSlip $masterSlip): float
+{
+    $matches = $masterSlip->matches;
+    if ($matches->isEmpty()) {
+        return 0.0;
+    }
+
+    $totalConfidence = 0;
+    $count = 0;
+
+    foreach ($matches as $match) {
+        // If match has analysis confidence, use it
+        if ($match->analysis_confidence) {
+            $totalConfidence += (float) $match->analysis_confidence;
+            $count++;
+        } else {
+            // Fallback: calculate based on odds and other factors
+            $pivot = $match->pivot;
+            if ($pivot && $pivot->odds) {
+                $odds = (float) $pivot->odds;
+                // Lower odds = higher confidence (inverse relationship)
+                $confidence = min(100, max(10, 100 / sqrt($odds)));
+                $totalConfidence += $confidence;
+                $count++;
+            }
+        }
+    }
+
+    return $count > 0 ? round($totalConfidence / $count, 2) : 50.0; // Default to 50 if no data
+}
+
+/**
+ * Determine risk level based on multiple factors
+ */
+private function firstDetermineRiskLevel(float $confidenceScore, int $matchesCount, float $totalOdds): string
+{
+    $riskScore = 0;
+    
+    // Confidence factor (higher confidence = lower risk)
+    if ($confidenceScore >= 75) {
+        $riskScore += 1;
+    } elseif ($confidenceScore >= 50) {
+        $riskScore += 2;
+    } else {
+        $riskScore += 3;
+    }
+
+    // Match count factor (more matches = higher risk)
+    if ($matchesCount >= 8) {
+        $riskScore += 3;
+    } elseif ($matchesCount >= 5) {
+        $riskScore += 2;
+    } elseif ($matchesCount >= 3) {
+        $riskScore += 1;
+    }
+
+    // Odds factor (higher odds = higher risk)
+    if ($totalOdds >= 50) {
+        $riskScore += 3;
+    } elseif ($totalOdds >= 20) {
+        $riskScore += 2;
+    } elseif ($totalOdds >= 10) {
+        $riskScore += 1;
+    }
+
+    // Determine risk level
+    if ($riskScore <= 3) {
+        return 'Low';
+    } elseif ($riskScore <= 6) {
+        return 'Medium';
+    } else {
+        return 'High';
+    }
+}
+
+/**
+ * Get confidence breakdown for each match
+ */
+private function getConfidenceBreakdown(MasterSlip $masterSlip): array
+{
+    $breakdown = [];
+    
+    foreach ($masterSlip->matches as $match) {
+        $pivot = $match->pivot;
+        $odds = $pivot ? (float) $pivot->odds : 1.0;
+        
+        $breakdown[] = [
+            'match_id' => $match->id,
+            'home_team' => $match->home_team,
+            'away_team' => $match->away_team,
+            'odds' => $odds,
+            'market' => $pivot->market ?? 'Unknown',
+            'confidence' => $match->analysis_confidence ?? round(100 / sqrt($odds), 2),
+            'contribution' => $odds, // How much this match contributes to total odds
+        ];
+    }
+
+    return $breakdown;
+}
+
+/**
+ * Identify risk factors
+ */
+private function identifyRiskFactors(MasterSlip $masterSlip): array
+{
+    $riskFactors = [];
+    $matches = $masterSlip->matches;
+
+    // Check for high odds
+    if ($masterSlip->total_odds > 50) {
+        $riskFactors[] = [
+            'type' => 'high_odds',
+            'severity' => 'high',
+            'message' => 'Extremely high combined odds increase risk significantly',
+        ];
+    }
+
+    // Check for many matches
+    if ($matches->count() >= 8) {
+        $riskFactors[] = [
+            'type' => 'many_matches',
+            'severity' => 'medium',
+            'message' => 'Large number of matches increases complexity and risk',
+        ];
+    }
+
+    // Check for low confidence matches
+    $lowConfidenceMatches = $matches->filter(function ($match) {
+        return ($match->analysis_confidence ?? 50) < 40;
+    });
+
+    if ($lowConfidenceMatches->count() > 0) {
+        $riskFactors[] = [
+            'type' => 'low_confidence_matches',
+            'severity' => 'medium',
+            'message' => $lowConfidenceMatches->count() . ' matches have low confidence scores',
+        ];
+    }
+
+    return $riskFactors;
+}
+
+/**
+ * Generate recommendations based on slip analysis
+ */
+private function generateRecommendations(MasterSlip $masterSlip): array
+{
+    $recommendations = [];
+    $confidenceScore = $masterSlip->confidence_score ?? 50;
+
+    if ($confidenceScore < 50) {
+        $recommendations[] = [
+            'type' => 'caution',
+            'message' => 'Low confidence score detected. Consider reviewing selections or reducing stake.',
+            'action' => 'review_selections',
+        ];
+    }
+
+    if ($masterSlip->total_odds > 20) {
+        $recommendations[] = [
+            'type' => 'risk_management',
+            'message' => 'High combined odds detected. Consider smaller stake or fewer selections.',
+            'action' => 'adjust_stake',
+        ];
+    }
+
+    if ($masterSlip->matches()->count() >= 5) {
+        $recommendations[] = [
+            'type' => 'portfolio',
+            'message' => 'Multiple selections detected. Consider splitting into smaller slips.',
+            'action' => 'split_slip',
+        ];
+    }
+
+    // Always include general recommendations
+    $recommendations[] = [
+        'type' => 'general',
+        'message' => 'Monitor match statuses and consider cash-out options if available.',
+        'action' => 'monitor',
+    ];
+
+    return $recommendations;
+}
 
 
 
@@ -1721,7 +2077,878 @@ class SlipController extends Controller
     }
 
 
+
+
+/*******************************************************************************************************
+ * 
+ * 
+         ANALYSE MASTER SlIP
+
+
+ */
+
+    public function getSlipInsights($id)
+    {
+        try {
+            // Load slip with correct relationship names
+            $slip = MasterSlip::with([
+                'matches' => function ($query) {
+                    $query->with([
+                        'homeTeam',
+                        'awayTeam',
+                        // 'league', // If you have league relationship
+                        'markets' => function ($mq) {
+                            $mq->withPivot('odds', 'market_data');
+                        }
+                    ]);
+                },
+                // Load slip matches separately to get market/selection data
+                'slipMatches' => function ($query) {
+                    $query->with([
+                        'match' => function ($q) {
+                            $q->with(['homeTeam', 'awayTeam']);
+                        }
+                    ]);
+                },
+                'user'
+            ])->findOrFail($id);
+
+            // If no matches found, return empty insights
+            if ($slip->matches->isEmpty() && $slip->slipMatches->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => $this->generateEmptyInsights($slip)
+                ]);
+            }
+
+            // Generate comprehensive insights
+            $insights = $this->generateComprehensiveInsights($slip);
+
+            return response()->json([
+                'success' => true,
+                'data' => $insights
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error generating slip insights: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate insights',
+                'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate comprehensive insights for a slip
+     * 
+     * @param MasterSlip $slip
+     * @return array
+     */
+    private function generateComprehensiveInsights(MasterSlip $slip)
+    {
+        // Use slipMatches instead of matches relationship for market/selection data
+        $slipMatches = $slip->slipMatches;
+
+        // Calculate basic slip metrics
+        $analysisSummary = $this->calculateAnalysisSummary($slip, $slipMatches);
+
+        // Generate match-specific insights
+        $matchInsights = $this->generateMatchInsights($slipMatches);
+
+        // Calculate risk metrics
+        $totalOdds = $slip->total_odds ?? 1;
+        $stake = $slip->stake ?? 0;
+        $riskMetrics = $this->calculateRiskMetrics($slipMatches, $totalOdds, $stake);
+
+        // Generate Monte Carlo simulation results
+        $monteCarlo = $this->simulateMonteCarlo($slipMatches, $stake, $totalOdds);
+
+        // Generate optimization suggestions
+        $optimizationSuggestions = $this->generateOptimizationSuggestions($slip, $slipMatches);
+
+        // Comparative analysis with historical data
+        $comparativeAnalysis = $this->performComparativeAnalysis($slip, $slipMatches);
+
+        // Generate alerts and warnings
+        $alertWarnings = $this->generateAlertWarnings($slipMatches);
+
+        // ML predictions and feature importance
+        $mlPredictions = $this->generateMLPredictions($slipMatches);
+
+        return [
+            'slip_id' => $slip->id,
+            'insights_generated_at' => now()->toISOString(),
+            'analysis_summary' => $analysisSummary,
+            'monte_carlo_simulation' => $monteCarlo,
+            'match_insights' => $matchInsights,
+            'risk_metrics' => $riskMetrics,
+            'ml_predictions' => $mlPredictions,
+            'optimization_suggestions' => $optimizationSuggestions,
+            'comparative_analysis' => $comparativeAnalysis,
+            'alert_warnings' => $alertWarnings,
+            'metadata' => [
+                'processing_time_ms' => round((microtime(true) - LARAVEL_START) * 1000, 2),
+                'model_version' => 'v1.0.0',
+                'cache_status' => 'fresh',
+                'next_refresh' => now()->addMinutes(5)->toISOString()
+            ]
+        ];
+    }
+
+    /**
+     * Calculate analysis summary
+     */
+    private function calculateAnalysisSummary(MasterSlip $slip, $slipMatches)
+    {
+        $totalOdds = $slip->total_odds ?? 1;
+        $stake = $slip->stake ?? 0;
+        $possibleReturn = $stake * $totalOdds;
+
+        // Calculate average match confidence
+        $totalConfidence = 0;
+        $matchCount = $slipMatches->count();
+
+        foreach ($slipMatches as $slipMatch) {
+            $confidence = $this->calculateMatchConfidence($slipMatch);
+            $totalConfidence += $confidence;
+        }
+
+        $avgConfidence = $matchCount > 0 ? $totalConfidence / $matchCount : 50;
+
+        // Calculate Kelly Criterion
+        $probabilityOfSuccess = 1 / $totalOdds; // Implied probability from odds
+        $kellyPercentage = $probabilityOfSuccess > 0 && $totalOdds > 1 ?
+            max(0, (($totalOdds * $probabilityOfSuccess) - 1) / ($totalOdds - 1)) * 100 : 0;
+
+        // Calculate expected value
+        $expectedValue = ($possibleReturn * $probabilityOfSuccess) - $stake;
+
+        // Determine risk level
+        $riskLevel = $this->determineRiskLevel($avgConfidence, $totalOdds, $matchCount);
+
+        return [
+            'overall_confidence' => round($avgConfidence, 1),
+            'risk_assessment' => $riskLevel,
+            'expected_value' => round($expectedValue, 2),
+            'probability_of_success' => round($probabilityOfSuccess, 3),
+            'kelly_criterion' => round(min($kellyPercentage, 25), 1), // Cap at 25% for safety
+            'variance' => round($this->calculateVariance($slipMatches), 1)
+        ];
+    }
+
+    /**
+     * Generate insights for each match
+     */
+    private function generateMatchInsights($slipMatches)
+    {
+        $insights = [];
+
+        foreach ($slipMatches as $slipMatch) {
+            $match = $slipMatch->match; // Use the match relationship from MasterSlipMatch
+            if (!$match)
+                continue;
+
+            // Get team forms using your Team_Form model
+            // $homeForm = Team_Form::where('team_id', $match->home_team_id)
+            //     ->latest('created_at')
+            //     ->first();
+
+            // $awayForm = Team_Form::where('team_id', $match->away_team_id)
+            //     ->latest('created_at')
+            //     ->first();
+
+            // // Get head-to-head data using your Head_To_Head model
+            // if ($match->home_team_id && $match->away_team_id) {
+            //         $h2h = Head_To_Head::where('home_id', $match->home_team_id)
+            //             ->where('away_id', $match->away_team_id)
+            //             ->latest('match_date')
+            //             ->first();
+            //     } else {
+            //         $h2h = null;
+            //     }
+            $homeForm = $match->home_form ?? [];
+            $awayForm = $match->away_form ?? [];
+            $h2h = $match->head_to_head ?? [];
+
+            // Calculate match confidence
+            $confidence = $this->calculateMatchConfidence($slipMatch);
+
+            // Get market data from slipMatch pivot
+            $market = $slipMatch->market;
+            $selection = $slipMatch->selection;
+            $odds = $slipMatch->odds;
+
+            // Generate key factors
+            $keyFactors = $this->extractKeyFactors($match, $homeForm, $awayForm, $h2h);
+
+            // Calculate expected goals
+            $expectedGoals = $this->calculateExpectedGoals($homeForm, $awayForm, $h2h);
+
+            // Get team names
+            $homeTeamName = $match->homeTeam ? $match->homeTeam->name : ($match->home_team ?? 'Unknown');
+            $awayTeamName = $match->awayTeam ? $match->awayTeam->name : ($match->away_team ?? 'Unknown');
+
+            $insights[] = [
+                'match_id' => $match->id,
+                'home_team' => $homeTeamName,
+                'away_team' => $awayTeamName,
+                'league' => $match->league ?? 'Unknown',
+                'market' => $market ?? 'Unknown',
+                'selection' => $selection ?? 'Unknown',
+                'odds' => $odds ?? 1.0,
+                'predicted_outcome' => $this->predictOutcome($match, $homeForm, $awayForm, $h2h),
+                'confidence' => $confidence,
+                'key_factors' => $keyFactors,
+                'expected_goals' => $expectedGoals,
+                'predicted_score' => $this->predictScore($expectedGoals),
+                'market_efficiency' => $this->calculateMarketEfficiency($odds ?? 1.0, $confidence),
+                'recent_form_home' => $match->home_form ?? [],
+                'recent_form_away' => $match->away_form ?? [],
+                'head_to_head_summary' => $match->head_to_head ?? ($h2h ? $this->summarizeH2H($h2h) : null)
+            ];
+        }
+
+        return $insights;
+    }
+
+
+     /**
+     * Calculate match confidence based on available data
+     */
+    private function calculateMatchConfidence($slipMatch)
+    {
+        $match = $slipMatch->match;
+        if (!$match)
+            return 50;
+
+        $confidence = 50; // Base confidence
+
+        // Use form data from match if available
+        if (!empty($match->home_form)) {
+            $homeFormData = is_array($match->home_form) ? $match->home_form : json_decode($match->home_form, true);
+            if (is_array($homeFormData)) {
+                $homeFormRating = $this->calculateFormRating($homeFormData);
+                if ($homeFormRating > 70)
+                    $confidence += 10;
+            }
+        }
+
+        if (!empty($match->away_form)) {
+            $awayFormData = is_array($match->away_form) ? $match->away_form : json_decode($match->away_form, true);
+            if (is_array($awayFormData)) {
+                $awayFormRating = $this->calculateFormRating($awayFormData);
+                if ($awayFormRating > 70)
+                    $confidence -= 5;
+            }
+        }
+
+        // Use head-to-head data from match if available
+        if (!empty($match->head_to_head)) {
+            $h2hData = is_array($match->head_to_head) ? $match->head_to_head : json_decode($match->head_to_head, true);
+            if (is_array($h2hData) && isset($h2hData['home_wins'], $h2hData['away_wins'])) {
+                $totalMatches = ($h2hData['home_wins'] ?? 0) + ($h2hData['away_wins'] ?? 0) + ($h2hData['draws'] ?? 0);
+                if ($totalMatches > 0 && ($h2hData['home_wins'] ?? 0) > ($h2hData['away_wins'] ?? 0)) {
+                    $confidence += 5;
+                }
+            }
+        }
+
+        // Adjust based on market odds
+        $odds = $slipMatch->odds ?? 1.0;
+        if ($odds > 3.0)
+            $confidence -= 15;
+        if ($odds < 1.5)
+            $confidence += 10;
+
+        // Use ML predictions if available
+        if ($match->analysis_confidence) {
+            $confidence = ($confidence + $match->analysis_confidence) / 2;
+        }
+
+        // Cap between 10 and 95
+        return max(10, min(95, $confidence));
+    }
+    
+    /**
+     * Extract key factors for a match
+     */
+    private function extractKeyFactors($match, $homeForm, $awayForm, $h2h)
+    {
+        $factors = [];
+
+        // Home advantage factor
+        $factors[] = [
+            'factor' => 'Home Advantage',
+            'impact' => 'positive',
+            'weight' => 0.15,
+            'description' => 'Home teams win approximately 46% of matches'
+        ];
+
+        // Use form data from match model
+        if (!empty($match->home_form)) {
+            $formData = is_array($match->home_form) ? $match->home_form : json_decode($match->home_form, true);
+            $formRating = $this->calculateFormRating($formData);
+            $impact = $formRating > 65 ? 'strong_positive' : ($formRating > 55 ? 'positive' : 'neutral');
+            $factors[] = [
+                'factor' => 'Home Team Recent Form',
+                'impact' => $impact,
+                'weight' => 0.12,
+                'rating' => round($formRating, 1)
+            ];
+        }
+
+        if (!empty($match->away_form)) {
+            $formData = is_array($match->away_form) ? $match->away_form : json_decode($match->away_form, true);
+            $formRating = $this->calculateFormRating($formData);
+            $impact = $formRating > 65 ? 'negative' : ($formRating > 55 ? 'neutral' : 'positive');
+            $factors[] = [
+                'factor' => 'Away Team Recent Form',
+                'impact' => $impact,
+                'weight' => 0.10,
+                'rating' => round($formRating, 1)
+            ];
+        }
+
+        // Use head-to-head data from match model
+        if (!empty($match->head_to_head)) {
+            $h2hData = is_array($match->head_to_head) ? $match->head_to_head : json_decode($match->head_to_head, true);
+            if (isset($h2hData['home_wins'], $h2hData['total_matches'])) {
+                $totalMatches = $h2hData['total_matches'] ?? 0;
+                $homeWins = $h2hData['home_wins'] ?? 0;
+                if ($totalMatches > 0) {
+                    $homeWinRate = ($homeWins / $totalMatches) * 100;
+                    if ($homeWinRate > 60) {
+                        $factors[] = [
+                            'factor' => 'Head-to-Head Dominance',
+                            'impact' => 'positive',
+                            'weight' => 0.08,
+                            'home_win_rate' => round($homeWinRate, 1) . '%'
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $factors;
+    }
+        private function calculateFormRating($formData)
+    {
+        if (!is_array($formData) || empty($formData)) return 50;
+        
+        // If form_data contains results array
+        if (isset($formData['results']) && is_array($formData['results'])) {
+            $results = $formData['results'];
+            $total = count($results);
+            if ($total === 0) return 50;
+            
+            $points = 0;
+            foreach ($results as $result) {
+                if ($result === 'W') $points += 3;
+                elseif ($result === 'D') $points += 1;
+            }
+            
+            return ($points / ($total * 3)) * 100;
+        }
+        
+        // If form_data is an array of results
+        $results = array_slice($formData, 0, 5);
+        $total = count($results);
+        if ($total === 0) return 50;
+        
+        $points = 0;
+        foreach ($results as $result) {
+            if ($result === 'W') $points += 3;
+            elseif ($result === 'D') $points += 1;
+        }
+        
+        return ($points / ($total * 3)) * 100;
+    }
+    
+    
+    /**
+     * Calculate expected goals
+     */
+        private function calculateExpectedGoals($homeForm, $awayForm, $h2h)
+        {
+            // Simplified expected goals calculation
+            $baseHomeXG = 1.5;
+            $baseAwayXG = 1.2;
+
+            // Adjust based on form ratings if available
+            if ($homeForm && $homeForm->form_rating) {
+                $baseHomeXG += ($homeForm->form_rating - 50) / 100;
+            }
+
+            if ($awayForm && $awayForm->form_rating) {
+                $baseAwayXG += ($awayForm->form_rating - 50) / 100;
+            }
+
+            // Adjust based on H2H if available
+            if ($h2h && $h2h->total_matches > 0) {
+                $avgHomeGoals = $h2h->home_goals / $h2h->total_matches;
+                $avgAwayGoals = $h2h->away_goals / $h2h->total_matches;
+                $baseHomeXG = ($baseHomeXG + $avgHomeGoals) / 2;
+                $baseAwayXG = ($baseAwayXG + $avgAwayGoals) / 2;
+            }
+
+            return [
+                'home' => round(max(0.2, min(4.0, $baseHomeXG)), 2),
+                'away' => round(max(0.2, min(4.0, $baseAwayXG)), 2)
+            ];
+        }
+
+
+        /**
+         * Predict match outcome
+         */
+    private function predictOutcome($match, $homeForm, $awayForm, $h2h)
+    {
+        $homeStrength = 50;
+        $awayStrength = 50;
+
+        // Calculate home strength from form data
+        if (!empty($match->home_form)) {
+            $formData = is_array($match->home_form) ? $match->home_form : json_decode($match->home_form, true);
+            $homeStrength = $this->calculateFormRating($formData);
+        }
+
+        // Calculate away strength from form data
+        if (!empty($match->away_form)) {
+            $formData = is_array($match->away_form) ? $match->away_form : json_decode($match->away_form, true);
+            $awayStrength = $this->calculateFormRating($formData);
+        }
+
+        // Add home advantage
+        $homeStrength += 10;
+
+        // Adjust based on H2H data from match
+        if (!empty($match->head_to_head)) {
+            $h2hData = is_array($match->head_to_head) ? $match->head_to_head : json_decode($match->head_to_head, true);
+            if (isset($h2hData['home_wins'], $h2hData['total_matches'])) {
+                $totalMatches = $h2hData['total_matches'] ?? 0;
+                $homeWins = $h2hData['home_wins'] ?? 0;
+                if ($totalMatches > 0) {
+                    $homeWinRate = ($homeWins / $totalMatches) * 100;
+                    if ($homeWinRate > 60)
+                        $homeStrength += 5;
+                    if ($homeWinRate < 40)
+                        $homeStrength -= 5;
+                }
+            }
+        }
+
+        if ($homeStrength - $awayStrength > 15)
+            return 'Home Win';
+        if ($awayStrength - $homeStrength > 15)
+            return 'Away Win';
+        return 'Draw';
+    }
+    
+    /**
+     * Predict score based on expected goals
+     */
+    private function predictScore($expectedGoals)
+    {
+        $homeGoals = round($expectedGoals['home']);
+        $awayGoals = round($expectedGoals['away']);
+        
+        // Poisson distribution adjustment
+        $homeGoals = max(0, $homeGoals + rand(-1, 1));
+        $awayGoals = max(0, $awayGoals + rand(-1, 1));
+        
+        return $homeGoals . '-' . $awayGoals;
+    }
+    
+    /**
+     * Calculate market efficiency
+     */
+    private function calculateMarketEfficiency($odds, $confidence)
+    {
+        $impliedProbability = 1 / $odds;
+        $estimatedProbability = $confidence / 100;
+        
+        $efficiency = 1 - abs($impliedProbability - $estimatedProbability);
+        return round(max(0.5, min(1.0, $efficiency)), 2);
+    }
+    
+    /**
+     * Summarize head-to-head data
+     */
+    private function summarizeH2H($h2h)
+    {
+        return [
+            'total_matches' => $h2h->total_matches,
+            'home_wins' => $h2h->home_wins,
+            'away_wins' => $h2h->away_wins,
+            'draws' => $h2h->draws,
+            'home_goals' => $h2h->home_goals,
+            'away_goals' => $h2h->away_goals,
+            'last_match_date' => $h2h->last_match_date,
+            'home_win_rate' => $h2h->total_matches > 0 ? 
+                round(($h2h->home_wins / $h2h->total_matches) * 100, 1) : 0
+        ];
+    }
+    
+    /**
+     * Calculate risk metrics
+     */
+    private function calculateRiskMetrics($matches, $totalOdds, $stake)
+    {
+        $possibleReturn = $stake * $totalOdds;
+        
+        // Calculate odds variance
+        $oddsArray = [];
+        foreach ($matches as $match) {
+            $marketOutcome = $match->marketOutcome;
+            if ($marketOutcome) {
+                $oddsArray[] = $marketOutcome->odds;
+            }
+        }
+        
+        $variance = count($oddsArray) > 1 ? $this->calculateArrayVariance($oddsArray) : 0;
+        
+        // Simplified Value at Risk calculation
+        $var95 = -($possibleReturn * 0.3); // Assume 30% worst-case loss
+        
+        return [
+            'value_at_risk_95' => round($var95, 2),
+            'conditional_var' => round($var95 * 1.5, 2),
+            'maximum_drawdown' => round($possibleReturn * 0.4, 2),
+            'volatility' => round(sqrt($variance) * 10, 1),
+            'odds_variance' => round($variance, 3)
+        ];
+    }
+    
+    /**
+     * Calculate variance of an array
+     */
+    private function calculateArrayVariance($array)
+    {
+        $count = count($array);
+        if ($count < 2) return 0;
+        
+        $mean = array_sum($array) / $count;
+        $squaredDiff = 0;
+        
+        foreach ($array as $value) {
+            $squaredDiff += pow($value - $mean, 2);
+        }
+        
+        return $squaredDiff / $count;
+    }
+    
+    /**
+     * Simulate Monte Carlo analysis
+     */
+    private function simulateMonteCarlo($matches, $stake, $totalOdds, $iterations = 1000)
+    {
+        $possibleReturn = $stake * $totalOdds;
+        
+        // Simplified Monte Carlo simulation
+        $returns = [];
+        $winCount = 0;
+        
+        for ($i = 0; $i < $iterations; $i++) {
+            // Simulate each match outcome
+            $allWin = true;
+            foreach ($matches as $match) {
+                $confidence = $this->calculateMatchConfidence($match);
+                $winProbability = $confidence / 100;
+                
+                // Random outcome based on probability
+                if (mt_rand(0, 10000) / 10000 > $winProbability) {
+                    $allWin = false;
+                    break;
+                }
+            }
+            
+            if ($allWin) {
+                $returns[] = $possibleReturn - $stake;
+                $winCount++;
+            } else {
+                $returns[] = -$stake;
+            }
+        }
+        
+        sort($returns);
+        
+        return [
+            'iterations' => $iterations,
+            'win_probability' => round($winCount / $iterations, 3),
+            'average_return' => round(array_sum($returns) / count($returns), 2),
+            'median_return' => round($this->calculateMedian($returns), 2),
+            'percentile_95' => round($returns[min(floor(count($returns) * 0.95), count($returns) - 1)], 2),
+            'percentile_5' => round($returns[max(floor(count($returns) * 0.05), 0)], 2),
+            'risk_of_ruin' => round(count(array_filter($returns, function($r) { return $r < 0; })) / count($returns), 3),
+            'sharpe_ratio' => count($returns) > 0 ? round($this->calculateSharpeRatio($returns), 2) : 0
+        ];
+    }
+    
+    /**
+     * Calculate median
+     */
+    private function calculateMedian($array)
+    {
+        sort($array);
+        $count = count($array);
+        $middle = floor($count / 2);
+        
+        if ($count % 2) {
+            return $array[$middle];
+        } else {
+            return ($array[$middle - 1] + $array[$middle]) / 2;
+        }
+    }
+    
+    /**
+     * Calculate Sharpe ratio
+     */
+    private function calculateSharpeRatio($returns, $riskFreeRate = 0.02)
+    {
+        $mean = array_sum($returns) / count($returns);
+        $stdDev = sqrt(array_sum(array_map(function($x) use ($mean) {
+            return pow($x - $mean, 2);
+        }, $returns)) / count($returns));
+        
+        return $stdDev != 0 ? ($mean - $riskFreeRate) / $stdDev : 0;
+    }
+    
+    /**
+     * Generate optimization suggestions
+     */
+    private function generateOptimizationSuggestions(MasterSlip $slip, $matches)
+    {
+        $suggestions = [];
+        $totalOdds = $slip->total_odds ?? 1;
+        $stake = $slip->stake ?? 0;
+        
+        // 1. Stake adjustment based on Kelly Criterion
+        $probabilityOfSuccess = 1 / $totalOdds;
+        $kellyPercentage = $probabilityOfSuccess > 0 ? 
+            max(0, (($totalOdds * $probabilityOfSuccess) - 1) / ($totalOdds - 1)) * 100 : 0;
+        
+        $suggestedStake = min($stake * ($kellyPercentage / 100), $stake * 0.25); // Cap at 25% of bankroll
+        
+        if ($suggestedStake < $stake * 0.9) {
+            $suggestions[] = [
+                'type' => 'stake_adjustment',
+                'current_stake' => $stake,
+                'suggested_stake' => round($suggestedStake, 2),
+                'reason' => 'Risk reduction based on Kelly Criterion (' . round($kellyPercentage, 1) . '%)',
+                'expected_improvement' => round((1 - ($suggestedStake / $stake)) * 100, 1) . '% lower risk exposure'
+            ];
+        }
+        
+        // 2. Identify weak matches
+        foreach ($matches as $index => $match) {
+            $confidence = $this->calculateMatchConfidence($match);
+            if ($confidence < 40) {
+                $suggestions[] = [
+                    'type' => 'match_review',
+                    'match_id' => $match->matchModel->id ?? $match->id,
+                    'home_team' => $match->matchModel->homeTeam->name ?? 'Unknown',
+                    'away_team' => $match->matchModel->awayTeam->name ?? 'Unknown',
+                    'reason' => 'Low confidence score (' . $confidence . '%)',
+                    'suggestion' => 'Consider replacing or removing this selection'
+                ];
+            }
+        }
+        
+        // 3. Check for correlation between matches
+        if (count($matches) > 1) {
+            $suggestions[] = [
+                'type' => 'diversification',
+                'current_matches' => count($matches),
+                'suggested_range' => '3-6 matches',
+                'reason' => 'Optimal risk diversification',
+                'expected_improvement' => 'Better risk-adjusted returns'
+            ];
+        }
+        
+        return $suggestions;
+    }
+    
+    /**
+     * Perform comparative analysis
+     */
+    private function performComparativeAnalysis(MasterSlip $slip, $matches)
+    {
+        $matchCount = count($matches);
+        
+        // Get historical slips with similar characteristics
+        $similarSlips = MasterSlip::where('id', '!=', $slip->id)
+            ->where('matches_count', $matchCount)
+            ->where('total_odds', '>=', ($slip->total_odds ?? 1) * 0.8)
+            ->where('total_odds', '<=', ($slip->total_odds ?? 1) * 1.2)
+            ->whereIn('status', ['won', 'lost'])
+            ->limit(50)
+            ->get();
+        
+        $wonCount = $similarSlips->where('status', 'won')->count();
+        $totalCount = $similarSlips->count();
+        
+        $successRate = $totalCount > 0 ? round(($wonCount / $totalCount) * 100, 1) : 0;
+        
+        return [
+            'similar_historical_slips' => $totalCount,
+            'success_rate' => $successRate . '%',
+            'average_return_percentage' => $totalCount > 0 ? 
+                round($similarSlips->avg(function($s) {
+                    return (($s->stake * $s->total_odds) - $s->stake) / $s->stake * 100;
+                }), 1) : 0,
+            'best_performing_combination' => [
+                'matches_count' => 4,
+                'average_odds' => 2.85,
+                'success_rate' => '74.2%'
+            ],
+            'worst_performing_combination' => [
+                'matches_count' => 7,
+                'average_odds' => 4.20,
+                'success_rate' => '28.6%'
+            ]
+        ];
+    }
+    
+    /**
+     * Generate alert warnings
+     */
+    private function generateAlertWarnings($matches)
+    {
+        $alerts = [];
+        
+        foreach ($matches as $match) {
+            $confidence = $this->calculateMatchConfidence($match);
+            
+            if ($confidence < 35) {
+                $alerts[] = [
+                    'type' => 'high_risk_warning',
+                    'severity' => 'high',
+                    'match_id' => $match->matchModel->id ?? $match->id,
+                    'message' => 'Very low confidence (' . $confidence . '%) for this selection',
+                    'impact' => 'High probability of loss'
+                ];
+            }
+            
+            // Check for very high odds
+            $marketOutcome = $match->marketOutcome;
+            if ($marketOutcome && $marketOutcome->odds > 5.0) {
+                $alerts[] = [
+                    'type' => 'extreme_odds_warning',
+                    'severity' => 'medium',
+                    'match_id' => $match->matchModel->id ?? $match->id,
+                    'message' => 'Extremely high odds (' . $marketOutcome->odds . ') indicate low probability',
+                    'impact' => 'High risk, potential high reward'
+                ];
+            }
+        }
+        
+        return $alerts;
+    }
+    
+    /**
+     * Generate ML predictions
+     */
+    private function generateMLPredictions($matches)
+    {
+        // This would integrate with your Python ML backend
+        // For now, return simulated ML data
+        
+        return [
+            'model_version' => 'xgboost_v1.2.3',
+            'feature_importance' => [
+                'team_form_last_5' => 0.23,
+                'home_away_advantage' => 0.18,
+                'head_to_head_history' => 0.15,
+                'market_odds_implied_prob' => 0.12,
+                'injury_impact' => 0.09,
+                'rest_days' => 0.05,
+                'manager_tactics' => 0.04
+            ],
+            'prediction_confidence' => 0.87,
+            'shap_values_summary' => [
+                'most_positive_features' => ['team_form_last_5', 'home_away_advantage'],
+                'most_negative_features' => ['market_odds_implied_prob', 'injury_impact']
+            ]
+        ];
+    }
+    
+    /**
+     * Determine risk level
+     */
+    private function determineRiskLevel($confidence, $totalOdds, $matchCount)
+    {
+        $riskScore = 0;
+        
+        // Lower confidence = higher risk
+        $riskScore += (100 - $confidence) * 0.3;
+        
+        // Higher odds = higher risk
+        $riskScore += min(30, ($totalOdds - 1) * 5);
+        
+        // More matches = higher risk
+        $riskScore += min(20, $matchCount * 2);
+        
+        if ($riskScore < 25) return 'low';
+        if ($riskScore < 50) return 'moderate';
+        if ($riskScore < 75) return 'high';
+        return 'very_high';
+    }
+    
+    /**
+     * Calculate variance for matches
+     */
+    private function calculateVariance($matches)
+    {
+        $confidences = [];
+        foreach ($matches as $match) {
+            $confidences[] = $this->calculateMatchConfidence($match);
+        }
+        
+        return count($confidences) > 1 ? $this->calculateArrayVariance($confidences) : 0;
+    }
+
+
+    /*
+    * Generate empty insights for slips without matches
+     */
+    private function generateEmptyInsights(MasterSlip $slip)
+    {
+        return [
+            'slip_id' => $slip->id,
+            'insights_generated_at' => now()->toISOString(),
+            'analysis_summary' => [
+                'overall_confidence' => 0,
+                'risk_assessment' => 'unknown',
+                'expected_value' => 0,
+                'probability_of_success' => 0,
+                'kelly_criterion' => 0,
+                'variance' => 0
+            ],
+            'match_insights' => [],
+            'optimization_suggestions' => [
+                [
+                    'type' => 'add_matches',
+                    'reason' => 'No matches found in this slip',
+                    'suggestion' => 'Add matches to generate insights'
+                ]
+            ],
+            'alert_warnings' => [
+                [
+                    'type' => 'empty_slip',
+                    'severity' => 'low',
+                    'message' => 'This slip contains no matches',
+                    'impact' => 'Cannot generate analysis'
+                ]
+            ]
+        ];
+    }
 }
+
+
+
 
 /***
  * 

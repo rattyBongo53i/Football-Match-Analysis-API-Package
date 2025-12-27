@@ -21,6 +21,17 @@ use App\Http\Controllers\Api\MasterSlipController;
 // routes/api.php
 use App\Http\Controllers\Api\PredictionController;
 
+Route::get('/test-queue', function () {
+    \App\Jobs\GenerateAlternativeSlipsJob::dispatch(6, 'default', 'medium');
+    return 'Dispatched';
+});
+
+Route::get('/test-markets', function () {
+
+$match = \App\Models\MatchModel::with('matchMarkets.outcomes')->find(40); // your latest match ID
+dd($match->matchMarkets->pluck('outcomes'));
+});
+
 Route::post('/matches/try-payload', [MatchController::class, 'generateEngineSlips']);
 
 
@@ -213,17 +224,23 @@ Route::get('/slips/{id}/dashboard', [SlipController::class, 'getDashboardSlip'])
 // get active slip
 Route::get('/slips/active-master-slips', [SlipController::class, 'showActiveSlip']);
 //addMatchToMasterSlip
-Route::post('/slips/{id}/add-match', [SlipController::class, 'addMatchToMasterSlip']);
+Route::post('/slips/{id}/add-match-old-method', [SlipController::class, 'addMatchToMasterSlip']);
+
+Route::get('/slips/{id}/insights', [SlipController::class, 'getSlipInsights']);
+Route::post('/slips/{id}/run-analysis', [SlipController::class, 'runSlipAnalysis']);
+Route::get('/slips/{id}/status', [SlipController::class, 'checkAnalysisStatus']);
+
+Route::post('/slips/{id}/add-match', [MasterslipController::class, 'addMatchToMasterSlip']);
 
     // Market endpoints
-    Route::get('markets', [MarketController::class, 'index']);
+ Route::get('markets', [MarketController::class, 'index']);
     
     // Job/analysis endpoints
-    Route::prefix('jobs')->group(function () {
-        Route::post('analyze-betslip', [JobController::class, 'analyzeBetslip']);
-        Route::get('{jobId}/status', [JobController::class, 'getStatus']);
-        Route::get('{jobId}/results', [JobController::class, 'getResults']);
-    });
+Route::prefix('jobs')->group(function () {
+    Route::post('analyze-betslip', [JobController::class, 'analyzeBetslip']);
+    Route::get('{jobId}/status', [JobController::class, 'getStatus']);
+    Route::get('{jobId}/results', [JobController::class, 'getResults']);
+});
     
     // Optional: Statistics endpoint
     Route::get('stats/matches', [\App\Http\Controllers\Api\StatsController::class, 'matches']);

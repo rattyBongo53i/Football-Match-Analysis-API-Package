@@ -1,0 +1,267 @@
+{
+  "home_team": "Manchester City",
+  "away_team": "Liverpool",
+  "league": "Premier League",
+  "match_date": "2025-12-26",
+  "match_time": "12:30",
+  "venue": "home",
+  "referee": "Andre Marriner",
+  "weather": "Cloudy",
+  "status": "scheduled",
+  "home_score": null,
+  "away_score": null,
+  "notes": "",
+  "home_form": {
+    "raw_form": [
+      {
+        "opponent": "Nottingham Forest",
+        "result": "3-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Bournemouth",
+        "result": "2-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Crystal Palace",
+        "result": "2-2",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Brighton",
+        "result": "3-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Fulham",
+        "result": "1-2",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Chelsea",
+        "result": "3-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "West Ham",
+        "result": "2-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Everton",
+        "result": "1-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Wolves",
+        "result": "2-2",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Aston Villa",
+        "result": "3-2",
+        "outcome": "W"
+      }
+    ],
+    "matches_played": 10,
+    "wins": 7,
+    "draws": 2,
+    "losses": 1,
+    "goals_scored": 22,
+    "goals_conceded": 11,
+    "avg_goals_scored": 2.2,
+    "avg_goals_conceded": 1.1,
+    "clean_sheets": 5,
+    "failed_to_score": 0,
+    "form_string": "WWDWLWWWDW",
+    "form_rating": 8.1,
+    "form_momentum": 2
+  },
+  "away_form": {
+    "raw_form": [
+      {
+        "opponent": "Manchester United",
+        "result": "2-2",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Tottenham",
+        "result": "3-2",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Newcastle United",
+        "result": "2-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Arsenal",
+        "result": "1-2",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Leicester City",
+        "result": "4-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Brentford",
+        "result": "2-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Luton Town",
+        "result": "3-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Southampton",
+        "result": "3-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Ipswich Town",
+        "result": "1-1",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Nottingham Forest",
+        "result": "2-0",
+        "outcome": "W"
+      }
+    ],
+    "matches_played": 10,
+    "wins": 7,
+    "draws": 2,
+    "losses": 1,
+    "goals_scored": 21,
+    "goals_conceded": 10,
+    "avg_goals_scored": 2.1,
+    "avg_goals_conceded": 1,
+    "clean_sheets": 4,
+    "failed_to_score": 1,
+    "form_string": "DWWLWWWWDW",
+    "form_rating": 8,
+    "form_momentum": 1
+  },
+  "head_to_head_stats": {
+    "home_wins": 3,
+    "away_wins": 2,
+    "draws": 0,
+    "total_meetings": 5,
+    "last_meetings": [
+      {
+        "date": "2025-10-04",
+        "home_team": "Manchester City",
+        "away_team": "Liverpool",
+        "score": "1-0",
+        "result": "H"
+      },
+      {
+        "date": "2025-04-19",
+        "home_team": "Liverpool",
+        "away_team": "Manchester City",
+        "score": "2-2",
+        "result": "D"
+      },
+      {
+        "date": "2024-12-01",
+        "home_team": "Manchester City",
+        "away_team": "Liverpool",
+        "score": "3-1",
+        "result": "H"
+      },
+      {
+        "date": "2024-09-15",
+        "home_team": "Liverpool",
+        "away_team": "Manchester City",
+        "score": "2-1",
+        "result": "A"
+      },
+      {
+        "date": "2024-03-02",
+        "home_team": "Manchester City",
+        "away_team": "Liverpool",
+        "score": "2-0",
+        "result": "H"
+      }
+    ]
+  },
+  "markets": [
+    {
+      "name": "match_result",
+      "odds": 0,
+      "market_type": "match_result",
+      "outcomes": [
+        {
+          "outcome": "1",
+          "odds": 0
+        },
+        {
+          "outcome": "X",
+          "odds": 0
+        },
+        {
+          "outcome": "2",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "correct_score",
+      "odds": 0,
+      "market_type": "correct_score",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "asian_handicap",
+      "odds": 0,
+      "market_type": "asian_handicap",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "both_teams_score",
+      "odds": 0,
+      "market_type": "both_teams_score",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "over/under",
+      "odds": 0,
+      "market_type": "over_under",
+      "outcomes": [
+        {
+          "outcome": "Over 2.5",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "halftime",
+      "odds": 0,
+      "market_type": "halftime",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    }
+  ]
+}

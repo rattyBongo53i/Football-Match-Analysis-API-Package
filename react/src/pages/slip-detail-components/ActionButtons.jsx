@@ -10,7 +10,6 @@ const ActionButtons = ({
   onEdit,
   onAnalyze,
   onDelete,
-  onAddMatches,
   onAddMatchesToSlip,
   matchesCount,
   onViewAnalysis,
@@ -25,14 +24,7 @@ const ActionButtons = ({
     >
       Delete Slip
     </Button>
-    <Button
-      variant="contained"
-      startIcon={<AddIcon />}
-      onClick={onAddMatches}
-      sx={{ textTransform: "none" }}
-    >
-      Add Matches
-    </Button>
+
     {matchesCount >= 2 && (
       <Button
         variant="outlined"

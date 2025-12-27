@@ -128,8 +128,17 @@ const slipApi = {
       throw error;
     }
   },
+  getSlipInsights: async (slipId) => {
+    try {
+      const response = await axios.get(`${API_URL}/slips/${slipId}/insights`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching slip insights:", error);
+      throw error;
+    }
+  },
 
-  // Run ML analysis on slip
+
   runSlipAnalysis: async (slipId) => {
     try {
       const response = await axios.post(`${API_URL}/slips/${slipId}/analyze`);
@@ -139,6 +148,17 @@ const slipApi = {
       throw error;
     }
   },
+
+    checkAnalysisStatus: async (slipId) => {
+    try {
+      const response = await axios.get(`${API_URL}/slips/${slipId}/status`);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking analysis status:', error);
+      throw error;
+    }
+  },
+
 
   // FILTER FUNCTION - Add this new function
   filterSlips: (slips, criteria) => {
@@ -222,6 +242,7 @@ const slipApi = {
     }
   },
 };
+
 
 
 

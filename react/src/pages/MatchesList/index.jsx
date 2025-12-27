@@ -70,7 +70,7 @@ const MatchesList = () => {
   };
 
   const handleDeleteMatch = async (matchId) => {
-    if (!window.confirm('Are you sure you want to delete this match?')) {
+    if (!window.confirm(`Are you sure you want to delete this match? ${matchId}`)) {
       return;
     }
 

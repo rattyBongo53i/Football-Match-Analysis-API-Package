@@ -191,7 +191,7 @@ Python endpoint/function signature for receiving Master Slip
 Explain why each piece exists and how data flows from UI → Laravel → Python.
 
 Repository reference:
-https://github.com/rattyBongo53i/Football-Match-Analysis-API-Package/tree/main
+https://github.com/rattyBongo53i/Football-Match-Analysis-API-Package.git
 
 
 ......................................................................................................................
@@ -263,3 +263,10 @@ GET /api/predictions/{match_id}
 
 
  https://github.com/rattyBongo53i/Football-Match-Analysis-API-Package/tree/main
+
+
+what the job can really do now 
+
+$slipMatch->match_data['home_team'];
+$slipMatch->selected_market['market_code'];
+$slipMatch->markets; // full snapshot

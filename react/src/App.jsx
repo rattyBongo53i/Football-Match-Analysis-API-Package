@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ThemeProvider, CssBaseline } from "@mui/material";
-import theme from "./theme";
+import { createTheme } from '@mui/material/styles';
+import { theme as designTokens }  from "./theme";
 import router from "./routes";
 import { RouterProvider } from "react-router-dom";
 import { BetslipProvider, useBetslip } from "./contexts/BetslipContext"; // ✅ Import useBetslip
@@ -9,7 +10,30 @@ import BetslipDrawer from "./components/betslip/BetslipDrawer";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
-import './global.css'
+import "./component.css";
+import "./global.css";
+import "./app.css";
+
+const muiTheme = createTheme({
+  palette: {
+    mode: "dark",
+    primary: {
+      main: designTokens.colors.accent.primary,
+    },
+    background: {
+      default: designTokens.colors.background.primary,
+      paper: designTokens.colors.surface.card,
+    },
+    text: {
+      primary: designTokens.colors.text.primary,
+      secondary: designTokens.colors.text.secondary,
+    },
+  },
+  shape: {
+    borderRadius: parseInt(designTokens.borderRadius.md),
+  },
+});
+
 // Separate component for the betslip button that uses the hook
 function BetslipButton({ setBetslipOpen }) {
   const { betslipMatches } = useBetslip(); // ✅ Now inside provider context
@@ -65,7 +89,7 @@ function AppContent() {
 
 function App() {
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={muiTheme}>
       <CssBaseline />
       <JobProvider>
         <BetslipProvider>

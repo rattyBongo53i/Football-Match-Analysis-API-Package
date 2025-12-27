@@ -1,0 +1,267 @@
+{
+  "home_team": "Real Madrid",
+  "away_team": "Atletico Madrid",
+  "league": "La Liga",
+  "match_date": "2025-12-29",
+  "match_time": "21:00",
+  "venue": "Santiago Bernabéu, Madrid, Spain (81044)",
+  "referee": "Gil Manzano",
+  "weather": "Clear",
+  "status": "scheduled",
+  "home_score": null,
+  "away_score": null,
+  "notes": "",
+  "home_form": {
+    "raw_form": [
+      {
+        "opponent": "Las Palmas",
+        "result": "4-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Valencia",
+        "result": "3-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Girona",
+        "result": "2-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Sevilla",
+        "result": "1-1",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Real Betis",
+        "result": "2-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Celta Vigo",
+        "result": "3-2",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Athletic Bilbao",
+        "result": "2-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Real Sociedad",
+        "result": "1-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Osasuna",
+        "result": "2-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Villarreal",
+        "result": "3-1",
+        "outcome": "W"
+      }
+    ],
+    "matches_played": 10,
+    "wins": 9,
+    "draws": 1,
+    "losses": 0,
+    "goals_scored": 25,
+    "goals_conceded": 8,
+    "avg_goals_scored": 2.5,
+    "avg_goals_conceded": 0.8,
+    "clean_sheets": 6,
+    "failed_to_score": 0,
+    "form_string": "WWWDWWWWWW",
+    "form_rating": 9.2,
+    "form_momentum": 4
+  },
+  "away_form": {
+    "raw_form": [
+      {
+        "opponent": "Rayo Vallecano",
+        "result": "2-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Mallorca",
+        "result": "1-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Alaves",
+        "result": "3-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Real Sociedad",
+        "result": "1-1",
+        "outcome": "D"
+      },
+      {
+        "opponent": "Leganes",
+        "result": "2-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Barcelona",
+        "result": "0-2",
+        "outcome": "L"
+      },
+      {
+        "opponent": "Villarreal",
+        "result": "2-1",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Sevilla",
+        "result": "2-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Granada",
+        "result": "3-0",
+        "outcome": "W"
+      },
+      {
+        "opponent": "Getafe",
+        "result": "1-1",
+        "outcome": "D"
+      }
+    ],
+    "matches_played": 10,
+    "wins": 7,
+    "draws": 2,
+    "losses": 1,
+    "goals_scored": 17,
+    "goals_conceded": 6,
+    "avg_goals_scored": 1.7,
+    "avg_goals_conceded": 0.6,
+    "clean_sheets": 5,
+    "failed_to_score": 1,
+    "form_string": "WWWDWLWWWD",
+    "form_rating": 8.4,
+    "form_momentum": 1
+  },
+  "head_to_head_stats": {
+    "home_wins": 4,
+    "away_wins": 1,
+    "draws": 0,
+    "total_meetings": 5,
+    "last_meetings": [
+      {
+        "date": "2025-09-28",
+        "home_team": "Real Madrid",
+        "away_team": "Atletico Madrid",
+        "score": "2-1",
+        "result": "H"
+      },
+      {
+        "date": "2025-03-02",
+        "home_team": "Atletico Madrid",
+        "away_team": "Real Madrid",
+        "score": "0-1",
+        "result": "A"
+      },
+      {
+        "date": "2024-12-15",
+        "home_team": "Real Madrid",
+        "away_team": "Atletico Madrid",
+        "score": "3-1",
+        "result": "H"
+      },
+      {
+        "date": "2024-06-08",
+        "home_team": "Atletico Madrid",
+        "away_team": "Real Madrid",
+        "score": "2-0",
+        "result": "A"
+      },
+      {
+        "date": "2024-01-19",
+        "home_team": "Real Madrid",
+        "away_team": "Atletico Madrid",
+        "score": "2-0",
+        "result": "H"
+      }
+    ]
+  },
+  "markets": [
+    {
+      "name": "match_result",
+      "odds": 0,
+      "market_type": "match_result",
+      "outcomes": [
+        {
+          "outcome": "1",
+          "odds": 0
+        },
+        {
+          "outcome": "X",
+          "odds": 0
+        },
+        {
+          "outcome": "2",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "correct_score",
+      "odds": 0,
+      "market_type": "correct_score",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "asian_handicap",
+      "odds": 0,
+      "market_type": "asian_handicap",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "both_teams_score",
+      "odds": 0,
+      "market_type": "both_teams_score",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "over/under",
+      "odds": 0,
+      "market_type": "over_under",
+      "outcomes": [
+        {
+          "outcome": "Over 2.5",
+          "odds": 0
+        }
+      ]
+    },
+    {
+      "name": "halftime",
+      "odds": 0,
+      "market_type": "halftime",
+      "outcomes": [
+        {
+          "outcome": "win",
+          "odds": 0
+        }
+      ]
+    }
+  ]
+}

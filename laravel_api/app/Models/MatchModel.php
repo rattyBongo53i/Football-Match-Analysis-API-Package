@@ -147,4 +147,11 @@
         return $this->hasMany(MasterSlipMatch::class, 'match_id');
     }
 
+
+    public function masterSlipMatches()
+    {
+        return $this->hasMany(MasterSlipMatch::class, 'master_slip_id', 'id');
+    }
+
+
 }

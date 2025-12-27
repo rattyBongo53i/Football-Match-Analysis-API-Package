@@ -7,9 +7,8 @@ return [
     | Default Queue Connection Name
     |--------------------------------------------------------------------------
     |
-    | Laravel's queue supports a variety of backends via a single, unified
-    | API, giving you convenient access to each backend using identical
-    | syntax for each. The default queue connection is defined below.
+    | This determines which queue connection Laravel will use by default.
+    | For XAMPP + MySQL, this MUST be "database".
     |
     */
 
@@ -19,29 +18,7 @@ return [
     |--------------------------------------------------------------------------
     | Queue Connections
     |--------------------------------------------------------------------------
-    |
-    | Here you may configure the connection options for every queue backend
-    | used by your application. An example configuration is provided for
-    | each backend supported by Laravel. You're also free to add more.
-    |
-    | Drivers: "sync", "database", "beanstalkd", "sqs", "redis", "null"
-    |
     */
-
-    'python' => [
-        'queues' => [
-            'default_queue' => 'python_default',
-            'ml_processing' => 'ml_processing',
-            'slip_generation' => 'slip_generation',
-            'batch_size' => 50,
-        ],
-        'cache' => [
-            'match_analysis' => 3600,
-            'team_form' => 1800,
-            'h2h_analysis' => 7200,
-            'predictions' => 1800,
-        ],
-    ],
 
     'connections' => [
 
@@ -51,42 +28,57 @@ return [
 
         'database' => [
             'driver' => 'database',
-            'connection' => env('DB_QUEUE_CONNECTION'),
-            'table' => env('DB_QUEUE_TABLE', 'jobs'),
-            'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
-            'after_commit' => false,
-        ],
-
-        'beanstalkd' => [
-            'driver' => 'beanstalkd',
-            'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),
-            'queue' => env('BEANSTALKD_QUEUE', 'default'),
-            'retry_after' => (int) env('BEANSTALKD_QUEUE_RETRY_AFTER', 90),
-            'block_for' => 0,
-            'after_commit' => false,
-        ],
-
-        'sqs' => [
-            'driver' => 'sqs',
-            'key' => env('AWS_ACCESS_KEY_ID'),
-            'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'prefix' => env('SQS_PREFIX', 'https://sqs.us-east-1.amazonaws.com/your-account-id'),
-            'queue' => env('SQS_QUEUE', 'default'),
-            'suffix' => env('SQS_SUFFIX'),
-            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
-            'after_commit' => false,
+            'connection' => env('DB_CONNECTION', 'mysql'),
+            'table' => 'jobs',
+            'queue' => 'default',
+            'retry_after' => 300, // 5 minutes for long-running Python jobs
+            'after_commit' => true, // Wait for database transaction to complete
+            'expire' => 3600, // Jobs expire after 1 hour
         ],
 
         'redis' => [
             'driver' => 'redis',
-            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'connection' => 'default',
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => 180,
             'block_for' => null,
             'after_commit' => false,
         ],
 
+
+    'queues' => [
+        // Priority order (highest to lowest)
+        'priorities' => [
+            'slip_generation',    // User slip creation (highest priority)
+            'python_requests',    // Python API calls
+            'ml_processing',      // ML model processing
+            'default',            // Everything else
+            'notifications',      // Email/SMS notifications (lowest)
+        ],
+        
+        // Queue-specific timeouts (seconds)
+        'timeouts' => [
+            'slip_generation' => 180,    // 3 minutes
+            'python_requests' => 120,    // 2 minutes
+            'ml_processing' => 300,      // 5 minutes
+            'default' => 60,             // 1 minute
+        ],
+        
+        // Retry attempts per queue
+        'retries' => [
+            'slip_generation' => 3,
+            'python_requests' => 3,
+            'ml_processing' => 2,
+            'default' => 3,
+        ],
+        
+        // Delay between retries (seconds)
+        'backoff' => [
+            'slip_generation' => [30, 60, 120],
+            'python_requests' => [15, 30, 60],
+            'ml_processing' => [60, 300],
+            'default' => [10, 30, 60],
+        ],
     ],
 
     /*
@@ -94,14 +86,12 @@ return [
     | Job Batching
     |--------------------------------------------------------------------------
     |
-    | The following options configure the database and table that store job
-    | batching information. These options can be updated to any database
-    | connection and table which has been defined by your application.
+    | For batch slip generation if needed in future
     |
     */
 
     'batching' => [
-        'database' => env('DB_CONNECTION', 'sqlite'),
+        'database' => env('DB_CONNECTION', 'mysql'),
         'table' => 'job_batches',
     ],
 
@@ -110,18 +100,35 @@ return [
     | Failed Queue Jobs
     |--------------------------------------------------------------------------
     |
-    | These options configure the behavior of failed queue job logging so you
-    | can control how and where failed jobs are stored. Laravel ships with
-    | support for storing failed jobs in a simple file or in a database.
-    |
-    | Supported drivers: "database-uuids", "dynamodb", "file", "null"
+    | Custom failed job configuration for better debugging
     |
     */
 
     'failed' => [
         'driver' => env('QUEUE_FAILED_DRIVER', 'database-uuids'),
-        'database' => env('DB_CONNECTION', 'sqlite'),
+        'database' => env('DB_CONNECTION', 'mysql'),
         'table' => 'failed_jobs',
+        // Custom failed job handler for your Python jobs
+        'handler' => env('QUEUE_FAILED_HANDLER', \Illuminate\Queue\Failed\DatabaseFailedJobHandler::class),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Queue Monitoring
+    |--------------------------------------------------------------------------
+    |
+    | Enable queue monitoring for your dashboard
+    |
+    */
+
+    'monitor' => [
+        'enabled' => env('QUEUE_MONITOR_ENABLED', true),
+        'refresh_interval' => env('QUEUE_MONITOR_REFRESH', 5000), // 5 seconds
+        'thresholds' => [
+            'warning' => env('QUEUE_MONITOR_WARNING', 100), // Warn at 100 jobs
+            'critical' => env('QUEUE_MONITOR_CRITICAL', 500), // Critical at 500 jobs
+        ],
+    ],
+
+],
 ];

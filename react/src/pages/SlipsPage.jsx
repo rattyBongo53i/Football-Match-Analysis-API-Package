@@ -20,6 +20,9 @@ import slipApi from "../services/api/slipApi";
 import SlipCard from "../components/slip/SlipCard";
 import { useNavigate } from "react-router-dom";
 import EmptyState from "../components/slip/EmptyStage";
+import CreateSlipModal from "./Slips/addNewSlip.jsx";
+// import ConfirmActionDialog from "./slip-detail-components/ConfirmActionDialog.jsx";
+
 
 const SlipsPage = () => {
   const navigate = useNavigate();
@@ -27,10 +30,16 @@ const SlipsPage = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
   const [error, setError] = useState(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+
+  const [availableMatches, setAvailableMatches] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  
   const [snackbar, setSnackbar] = useState({ open: false, message: "" });
 
   useEffect(() => {
     fetchSlips();
+    fetchAvailableMatches();
   }, []);
 
   const fetchSlips = async () => {
@@ -53,10 +62,33 @@ const SlipsPage = () => {
     }
   };
 
+
+   const fetchAvailableMatches = async () => {
+     try {
+       setMatchesLoading(true);
+       // Assuming you have an API to get available matches
+       // This should return matches with their markets
+       const response = await slipApi.getAvailableMatches(); // Adjust API call as needed
+       setAvailableMatches(response.data || []);
+     } catch (err) {
+       console.error("Error fetching matches:", err);
+       // You can set default matches or leave empty
+       setAvailableMatches([]);
+     } finally {
+       setMatchesLoading(false);
+     }
+   };
+
   // Navigation handler passed to SlipCard
   const handleViewSlip = (id) => {
-    navigate(`/slips/${id}`);
+     navigate(`/slips/${id}`);
   };
+//create new slip
+  const handleCreateSlip = async () => { 
+
+    setCreateModalOpen(true);
+  };
+
 
   const handleSnackbarClose = () => setSnackbar({ ...snackbar, open: false });
 
@@ -93,12 +125,20 @@ const SlipsPage = () => {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => navigate("/slips/new")}
+              onClick={handleCreateSlip}
               sx={{ borderRadius: 2, textTransform: "none" }}
             >
               New Slip
             </Button>
           </Box>
+
+          <CreateSlipModal
+            open={createModalOpen}
+            onClose={() => setCreateModalOpen(false)}
+            availableMatches={availableMatches}
+            // Optional: Pass loading state for matches
+            // matchesLoading={matchesLoading}
+          />
         </Toolbar>
       </AppBar>
 

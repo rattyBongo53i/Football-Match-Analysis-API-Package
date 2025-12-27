@@ -18,7 +18,7 @@ class MatchMarket extends Model
     protected $casts = [
         'odds' => 'decimal:3',
         'is_active' => 'boolean',
-        'additional_data' => 'array'
+        'market_data' => 'array'
     ];
 
     // Relationships
@@ -30,5 +30,10 @@ class MatchMarket extends Model
     public function market()
     {
         return $this->belongsTo(Market::class, 'market_id', 'id');
+    }
+
+    public function outcomes()
+    {
+        return $this->hasMany(MatchMarketOutcome::class, 'match_market_id');
     }
 }

@@ -44,6 +44,10 @@ class Market extends Model
         return $this->hasMany(MarketOutcomes::class, 'market_id', 'id');
     }
 
+    public function marketOutcomes()
+    {
+        return $this->hasMany(MarketOutcomes::class, 'market_id', 'id');
+    }
     public function matchMarkets()
     {
         return $this->hasMany(MatchMarket::class, 'market_id', 'id');

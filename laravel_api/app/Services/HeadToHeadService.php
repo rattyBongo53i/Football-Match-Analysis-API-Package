@@ -5,9 +5,11 @@ namespace App\Services;
 
 use App\Models\MatchModel;
 use App\Models\Team;
+use App\Models\Head_To_Head;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class HeadToHeadService
 {
@@ -20,27 +22,48 @@ class HeadToHeadService
     public function getHeadToHeadData(int $team1Id, int $team2Id, int $limit = 5): array
     {
         $cacheKey = "h2h_{$team1Id}_{$team2Id}_{$limit}";
-        
+
         return Cache::remember($cacheKey, self::H2H_CACHE_TTL, function () use ($team1Id, $team2Id, $limit) {
-            $team1 = Team::findOrFail($team1Id);
-            $team2 = Team::findOrFail($team2Id);
-            
-            // Get all historical matches between teams
-            $allMatches = $this->getHistoricalMatches($team1Id, $team2Id);
-            $recentMatches = $allMatches->take($limit);
-            
-            // Calculate statistics
-            $stats = $this->calculateH2HStats($allMatches, $team1Id, $team2Id);
-            
-            // Determine dominance
+            $team1 = Team::find($team1Id);
+            $team2 = Team::find($team2Id);
+
+            if (!$team1 || !$team2) {
+                Log::warning('Teams not found for H2H lookup', [
+                    'team1_id' => $team1Id,
+                    'team2_id' => $team2Id
+                ]);
+
+                return $this->getNeutralH2HData($team1, $team2);
+            }
+
+            // Get authoritative head-to-head record from head_to_head table
+            $h2hRecord = $this->getHistoricalMatches($team1Id, $team2Id);
+
+            if (!$h2hRecord) {
+                Log::info('No head-to-head record found', [
+                    'team1' => $team1->name,
+                    'team2' => $team2->name
+                ]);
+
+                return $this->getNeutralH2HData($team1, $team2);
+            }
+
+            // Calculate statistics from the precomputed record
+            $stats = $this->calculateH2HStats($h2hRecord, $team1Id, $team2Id);
+
+            // Use recent meetings from JSON (already limited in the data)
+            $lastMeetings = json_decode($h2hRecord->last_meetings, true) ?? [];
+            $recentMeetings = array_slice($lastMeetings, 0, $limit);
+
+            // Determine dominance from precomputed score
             $dominance = $this->determineDominance($stats, $team1, $team2);
-            
-            // Get venue performance
-            $venuePerformance = $this->getVenuePerformance($allMatches, $team1Id, $team2Id);
-            
-            // Get recent trend
-            $recentTrend = $this->getRecentTrend($recentMatches, $team1Id, $team2Id);
-            
+
+            // Get venue performance (simplified - use home/away goals from record)
+            $venuePerformance = $this->getVenuePerformance($h2hRecord, $team1Id, $team2Id);
+
+            // Get recent trend from last meetings
+            $recentTrend = $this->getRecentTrend($recentMeetings, $team1Id, $team2Id, $h2hRecord);
+
             return [
                 'team1' => [
                     'id' => $team1->id,
@@ -63,63 +86,95 @@ class HeadToHeadService
                 'dominance' => $dominance,
                 'venue_performance' => $venuePerformance,
                 'recent_trend' => $recentTrend,
-                'last_meetings' => $this->formatRecentMeetings($recentMatches, $team1Id, $team2Id),
-                'historical_summary' => $this->getHistoricalSummary($allMatches, $team1Id, $team2Id),
+                'last_meetings' => $this->formatRecentMeetings($h2hRecord, $team1Id, $team2Id),
+                'historical_summary' => $this->getHistoricalSummary($h2hRecord, $team1Id, $team2Id),
             ];
         });
     }
+
+    protected function getNeutralH2HData($team1, $team2): array
+{
+    return [
+        'team1' => $team1 ? ['id' => $team1->id, 'name' => $team1->name] : null,
+        'team2' => $team2 ? ['id' => $team2->id, 'name' => $team2->name] : null,
+        'total_matches' => 0,
+        'team1_wins' => 0,
+        'team2_wins' => 0,
+        'draws' => 0,
+        'team1_win_rate' => 0,
+        'team2_win_rate' => 0,
+        'draw_rate' => 0,
+        'avg_goals' => 0,
+        'avg_goals_team1' => 0,
+        'avg_goals_team2' => 0,
+        'dominance' => ['dominant_team' => null, 'dominance_level' => 'none'],
+        'venue_performance' => ['home_advantage' => 0],
+        'recent_trend' => ['last_5_results' => [], 'momentum' => 'neutral'],
+        'last_meetings' => [],
+        'historical_summary' => [],
+    ];
+}
     
     /**
      * Get historical matches between teams
      */
     protected function getHistoricalMatches(int $team1Id, int $team2Id)
     {
-        return MatchModel::where(function($query) use ($team1Id, $team2Id) {
-            $query->where(function($q) use ($team1Id, $team2Id) {
-                $q->where('home_team_id', $team1Id)
-                  ->where('away_team_id', $team2Id);
-            })->orWhere(function($q) use ($team1Id, $team2Id) {
-                $q->where('home_team_id', $team2Id)
-                  ->where('away_team_id', $team1Id);
+        // Query head_to_head table directly - primary source of truth
+        return Head_To_Head::where(function ($query) use ($team1Id, $team2Id) {
+            $query->where(function ($q) use ($team1Id, $team2Id) {
+                $q->where('home_id', $team1Id)
+                    ->where('away_id', $team2Id);
+            })->orWhere(function ($q) use ($team1Id, $team2Id) {
+                $q->where('home_id', $team2Id)
+                    ->where('away_id', $team1Id);
             });
-        })
-        ->where('status', 'completed')
-        ->where('match_date', '<', Carbon::now())
-        ->orderBy('match_date', 'desc')
-        ->limit(self::MAX_H2H_MATCHES)
-        ->with(['homeTeam', 'awayTeam', 'venue', 'league'])
-        ->get();
+        })->first();
     }
     
     /**
      * Calculate H2H statistics
      */
-    protected function calculateH2HStats($matches, int $team1Id, int $team2Id): array
+    protected function calculateH2HStats($h2hRecord, int $team1Id, int $team2Id): array
     {
-        $team1Wins = 0;
-        $team2Wins = 0;
-        $draws = 0;
-        $totalGoalsTeam1 = 0;
-        $totalGoalsTeam2 = 0;
-        $totalMatches = $matches->count();
-        
-        foreach ($matches as $match) {
-            $isTeam1Home = $match->home_team_id == $team1Id;
-            $team1Goals = $isTeam1Home ? $match->home_goals : $match->away_goals;
-            $team2Goals = $isTeam1Home ? $match->away_goals : $match->home_goals;
-            
-            $totalGoalsTeam1 += $team1Goals;
-            $totalGoalsTeam2 += $team2Goals;
-            
-            if ($team1Goals > $team2Goals) {
-                $team1Wins++;
-            } elseif ($team1Goals < $team2Goals) {
-                $team2Wins++;
-            } else {
-                $draws++;
-            }
+        if (!$h2hRecord) {
+            return [
+                'total_matches' => 0,
+                'team1_wins' => 0,
+                'team2_wins' => 0,
+                'draws' => 0,
+                'team1_win_rate' => 0,
+                'team2_win_rate' => 0,
+                'draw_rate' => 0,
+                'avg_goals' => 0,
+                'avg_goals_team1' => 0,
+                'avg_goals_team2' => 0,
+                'total_goals_team1' => 0,
+                'total_goals_team2' => 0,
+            ];
         }
-        
+
+        // Decode stats JSON
+        $stats = json_decode($h2hRecord->stats, true) ?? [];
+
+        // Determine if team1 is home or away in this record
+        $isTeam1Home = $h2hRecord->home_id == $team1Id;
+
+        // Map stats based on which team is which
+        $team1Wins = $isTeam1Home ? ($stats['home_wins'] ?? 0) : ($stats['away_wins'] ?? 0);
+        $team2Wins = $isTeam1Home ? ($stats['away_wins'] ?? 0) : ($stats['home_wins'] ?? 0);
+        $draws = $stats['draws'] ?? 0;
+        $totalMatches = $stats['total_meetings'] ?? 0;
+
+        // Goals from the record (already aggregated)
+        $totalGoalsTeam1 = $isTeam1Home ? ($h2hRecord->home_goals ?? 0) : ($h2hRecord->away_goals ?? 0);
+        $totalGoalsTeam2 = $isTeam1Home ? ($h2hRecord->away_goals ?? 0) : ($h2hRecord->home_goals ?? 0);
+
+        // Calculate averages
+        $avgGoals = $totalMatches > 0 ? round(($totalGoalsTeam1 + $totalGoalsTeam2) / $totalMatches, 2) : 0;
+        $avgGoalsTeam1 = $totalMatches > 0 ? round($totalGoalsTeam1 / $totalMatches, 2) : 0;
+        $avgGoalsTeam2 = $totalMatches > 0 ? round($totalGoalsTeam2 / $totalMatches, 2) : 0;
+
         return [
             'total_matches' => $totalMatches,
             'team1_wins' => $team1Wins,
@@ -128,9 +183,9 @@ class HeadToHeadService
             'team1_win_rate' => $totalMatches > 0 ? round($team1Wins / $totalMatches, 3) : 0,
             'team2_win_rate' => $totalMatches > 0 ? round($team2Wins / $totalMatches, 3) : 0,
             'draw_rate' => $totalMatches > 0 ? round($draws / $totalMatches, 3) : 0,
-            'avg_goals' => $totalMatches > 0 ? round(($totalGoalsTeam1 + $totalGoalsTeam2) / $totalMatches, 2) : 0,
-            'avg_goals_team1' => $totalMatches > 0 ? round($totalGoalsTeam1 / $totalMatches, 2) : 0,
-            'avg_goals_team2' => $totalMatches > 0 ? round($totalGoalsTeam2 / $totalMatches, 2) : 0,
+            'avg_goals' => $avgGoals,
+            'avg_goals_team1' => $avgGoalsTeam1,
+            'avg_goals_team2' => $avgGoalsTeam2,
             'total_goals_team1' => $totalGoalsTeam1,
             'total_goals_team2' => $totalGoalsTeam2,
         ];
@@ -343,32 +398,44 @@ class HeadToHeadService
     /**
      * Format recent meetings
      */
-    protected function formatRecentMeetings($matches, int $team1Id, int $team2Id): array
+    protected function formatRecentMeetings($h2hRecord, int $team1Id, int $team2Id): array
     {
+        if (!$h2hRecord || !$h2hRecord->last_meetings) {
+            return [];
+        }
+
+        $lastMeetings = json_decode($h2hRecord->last_meetings, true) ?? [];
         $formatted = [];
-        
-        foreach ($matches as $match) {
-            $isTeam1Home = $match->home_team_id == $team1Id;
-            $team1Goals = $isTeam1Home ? $match->home_goals : $match->away_goals;
-            $team2Goals = $isTeam1Home ? $match->away_goals : $match->home_goals;
-            
+
+        foreach ($lastMeetings as $meeting) {
+            // Determine if team1 was home in this meeting
+            $isTeam1Home = ($meeting['home_team'] ?? '') === ($h2hRecord->home_name ?? '');
+
             $formatted[] = [
-                'date' => $match->match_date->format('Y-m-d'),
-                'home_team' => $match->homeTeam->name,
-                'away_team' => $match->awayTeam->name,
-                'score' => $match->home_goals . '-' . $match->away_goals,
-                'venue' => $match->venue->name,
-                'league' => $match->league->name,
-                'winner' => $this->determineWinner($match, $team1Id, $team2Id),
-                'team1_goals' => $team1Goals,
-                'team2_goals' => $team2Goals,
+                'date' => $meeting['date'] ?? 'Unknown',
+                'home_team' => $meeting['home_team'] ?? 'Unknown',
+                'away_team' => $meeting['away_team'] ?? 'Unknown',
+                'score' => $meeting['score'] ?? '0-0',
+                'venue' => 'Unknown', // Not stored in JSON
+                'league' => 'Unknown', // Not stored in JSON
+                'winner' => $this->determineWinnerFromResult($meeting['result'] ?? 'D', $meeting['home_team'] ?? '', $meeting['away_team'] ?? ''),
+                'team1_goals' => $isTeam1Home ? explode('-', $meeting['score'] ?? '0-0')[0] : explode('-', $meeting['score'] ?? '0-0')[1],
+                'team2_goals' => $isTeam1Home ? explode('-', $meeting['score'] ?? '0-0')[1] : explode('-', $meeting['score'] ?? '0-0')[0],
                 'team1_was_home' => $isTeam1Home,
             ];
         }
-        
+
         return $formatted;
     }
-    
+
+    protected function determineWinnerFromResult(string $result, string $homeTeam, string $awayTeam): string
+    {
+        return match ($result) {
+            'H' => $homeTeam,
+            'A' => $awayTeam,
+            default => 'Draw',
+        };
+    }
     /**
      * Determine winner for formatted output
      */

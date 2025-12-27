@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+// hasmany
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MasterSlip extends Model
 {
@@ -64,10 +66,23 @@ class MasterSlip extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function slipMatches()
+       // ====================================================================
+    // ADD THIS RELATIONSHIP - This is what your job is looking for
+    // ====================================================================
+    
+    /**
+     * Get all slip matches (pivot records) for this master slip
+     */
+    public function slipMatches(): HasMany
     {
-         return $this->hasMany(MasterSlipMatch::class, 'master_slip_id', 'id');
+        return $this->hasMany(MasterSlipMatch::class, 'master_slip_id', 'id');
     }
+
+    // ====================================================================
+    // ALSO ADD THIS if you need to access the actual Match models
+    // ====================================================================
+
+    
 
     public function matches()
     {

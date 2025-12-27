@@ -1,0 +1,241 @@
+/* components.css - Detailed component refinements */
+
+/* Match Card - Enhanced */
+.match-card {
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1a1f26 0%, #161b22 100%);
+  border: 1px solid #30363d;
+  padding: 24px;
+  gap: 16px;
+  transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.match-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 200%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(88, 166, 255, 0.1),
+    transparent
+  );
+  transition: left 500ms ease;
+}
+
+.match-card:hover {
+  border-color: #3d444d;
+  box-shadow:  
+    0 8px 16px rgba(0, 0, 0, 0.25),
+    0 16px 32px rgba(0, 0, 0, 0.15);
+  transform: translateY(-6px);
+}
+
+.match-card:hover::before {
+  left: 100%;
+}
+
+/* Team Badge - Enhanced Roundness */
+.team-badge {
+  border-radius: 12px;
+  padding: 12px 16px;
+  background-color: #242a33;
+  border: 1px solid #30363d;
+  transition: all 150ms ease;
+}
+
+.team-badge:hover {
+  background-color: #2d3339;
+  border-color: #3d444d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Form Section - Rounded Container */
+.form-section {
+  background: #1a1f26;
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid #30363d;
+  margin-bottom: 24px;
+  transition: all 250ms ease;
+}
+
+.form-section:hover {
+  border-color: #3d444d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Input Group - Enhanced Styling */
+.input-group {
+  position: relative;
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #c9d1d9;
+  letter-spacing: 0.5px;
+}
+
+.input-group input,
+.input-group select {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background-color: #242a33;
+  border: 1px solid #30363d;
+  color: #f0f6fc;
+  transition: all 150ms ease;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+  outline: none;
+}
+
+.input-group input::placeholder {
+  color: #6e7681;
+}
+
+/* Button Group - Spacing */
+.button-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* CTA Button - Primary Action */
+.btn-cta {
+  padding: 14px 28px;
+  border-radius:  12px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
+  transition: all 150ms ease;
+}
+
+.btn-cta:hover {
+  box-shadow: 0 8px 20px rgba(35, 134, 54, 0.4);
+  transform: translateY(-2px);
+}
+
+.btn-cta:active {
+  transform: translateY(0);
+}
+
+/* Stats Container - Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.stat-item {
+  background: #242a33;
+  border:  1px solid #30363d;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  transition: all 200ms ease;
+}
+
+.stat-item:hover {
+  border-color: #3d444d;
+  background: #2d3339;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color:  #58a6ff;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Modal/Drawer - Enhanced */
+.modal {
+  border-radius: 20px;
+  box-shadow: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.4),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+/* Tabs - Smooth Underline */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #30363d;
+  gap: 8px;
+}
+
+.tab-item {
+  padding: 12px 16px;
+  color: #8b949e;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 200ms ease;
+  position: relative;
+}
+
+.tab-item.active {
+  color: #58a6ff;
+  border-bottom-color: #58a6ff;
+}
+
+.tab-item:hover:not(.active) {
+  color: #c9d1d9;
+}
+
+/* Loading Skeleton - Refined */
+.skeleton {
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    #242a33 25%,
+    #2d3339 50%,
+    #242a33 75%
+  );
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .match-card {
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .form-section {
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
